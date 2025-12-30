@@ -212,7 +212,8 @@ def handle_action(request: schemas.UserActionRequest, background_tasks: Backgrou
             message = f"쓰레기를 치워서 {habitat_name}이(가) 깨끗해졌습니다. (오염도 -2)"
         elif species.type == 2:
             money_change = -1000 # 벌금
-            message = "멸종위기종을 팔려다 적발되어 벌금을 물었습니다! (-1000원)"
+            pollution_change = 10 # 오염
+            message = f"멸종위기종을 팔려다 적발되어 벌금을 물고 {habitat_name}이(가) 오염되었습니다! (-1000원, 오염도 +10)"
         else:
             final_price = species.price
             if is_sick:
