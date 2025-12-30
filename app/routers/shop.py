@@ -9,7 +9,7 @@ router = APIRouter(
     tags=["shop"]
 )
 
-# 상점 아이템 목록 (낚싯대)
+# 상점 아이템 목록
 SHOP_ITEMS = {
     1: {"name": "카본 낚싯대 (Lv.2)", "price": 1000, "level": 2, "desc": "쓰레기 -3%, 생태계 교란종 -3%, 일반 물고기 +5%, 멸종 위기종 +1%"},
     2: {"name": "티타늄 낚싯대 (Lv.3)", "price": 5000, "level": 3, "desc": "쓰레기 -5%, 생태계 교란종 -5%, 일반 물고기 +7%, 멸종 위기종 +3%"}
@@ -37,23 +37,40 @@ def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)
     item = SHOP_ITEMS.get(request.item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    
-    # 이미 더 좋거나 같은 낚싯대를 가지고 있는지 확인
-    if user.rod_level >= item["level"]:
-        raise HTTPException(status_code=400, detail="이미 같거나 더 좋은 낚싯대를 가지고 있습니다.")
 
-    # 돈 확인
+    # [핵심 로직 변경]
+    # 1. 이미 인벤토리에 있는지 확인
+    owned_item = db.query(models.Inventory).filter(
+        models.Inventory.user_id == user.id,
+        models.Inventory.item_id == request.item_id
+    ).first()
+
+    if owned_item:
+        # 이미 샀던 거라면 -> 돈 안 들고 장착만!
+        user.rod_level = item["level"]
+        db.commit()
+        return {
+            "message": f"{item['name']}을(를) 장착했습니다! (이미 보유중)",
+            "current_money": user.money,
+            "current_rod_level": user.rod_level
+        }
+
+    # 2. 없는 거라면 -> 돈 내고 구매
     if user.money < item["price"]:
         raise HTTPException(status_code=400, detail="돈이 부족합니다!")
         
-    # 구매 처리 (돈 차감, 낚싯대 레벨 업)
+    # 결제 및 장착
     user.money -= item["price"]
-    user.rod_level = item["level"] # 낚싯대 교체
+    user.rod_level = item["level"]
+    
+    # 인벤토리에 추가 (영수증)
+    new_inventory = models.Inventory(user_id=user.id, item_id=request.item_id)
+    db.add(new_inventory)
     
     db.commit()
     
     return {
-        "message": f"{item['name']} 구매 성공! 낚시 확률이 좋아졌습니다.",
+        "message": f"{item['name']} 구매 성공! 낚싯대가 장착되었습니다.",
         "current_money": user.money,
         "current_rod_level": user.rod_level
     }
