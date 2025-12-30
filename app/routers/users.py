@@ -13,7 +13,7 @@ router = APIRouter(
 def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)):
     existing_user = db.query(models.User).filter(models.User.nickname == user.nickname).first()
     if existing_user:
-        raise HTTPException(status_code=400, detail="이미 존재하는 닉네임입니다.")
+        return existing_user
     
     new_user = models.User(nickname=user.nickname)
     db.add(new_user)
