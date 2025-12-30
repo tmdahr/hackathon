@@ -50,3 +50,13 @@ class Inventory(Base):
     item_id = Column(Integer) # 상점 아이템 ID
     
     user = relationship("User", back_populates="inventory")
+
+class FishingHistory(Base):
+    __tablename__ = "fishing_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    species_id = Column(Integer, ForeignKey("species.id"))
+    caught_at = Column(String(50))  # ISO timestamp
+    was_new = Column(Boolean, default=False)
+    invalidated = Column(Boolean, default=False)

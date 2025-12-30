@@ -23,10 +23,10 @@ def select_species_type_by_pollution(pollution: int, rod_level: int):
         weights = [60, 45, 5]
     elif pollution >= 40:
         # 깨끗함
-        weights = [20, 65, 15]
+        weights = [30, 60, 10]
     else:
         # 매우 깨끗함
-        weights = [5, 65, 25]
+        weights = [5, 70, 25]
 
     # 2. 낚싯대 레벨에 따른 확률 보정
     if rod_level == 2:  # 카본 낚싯대
@@ -115,8 +115,21 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     user.money += caught_fish.price
     
     # 오염도 변화 (쓰레기 잡으면 청소됨, 아니면 그대로)
+    pollution_change = 0
     if caught_fish.type == 0: # 쓰레기
+        pollution_change = -5
         user.pollution_level = max(0, user.pollution_level - 5)
+    
+    # 5. 낚시 기록 저장 (무효화를 위해)
+    from datetime import datetime
+    fishing_record = models.FishingHistory(
+        user_id=user.id,
+        species_id=caught_fish.id,
+        caught_at=datetime.now().isoformat(),
+        was_new=is_new,
+        invalidated=False
+    )
+    db.add(fishing_record)
     
     db.commit()
     
@@ -255,3 +268,48 @@ def get_type_name(type_code: int):
     if type_code == 1: return "일반 해양 생물"
     if type_code == 2: return "멸종위기종"
     return "기타"
+@router.post("/invalidate-last-fish", summary="최근 낚시 무효화", description="가장 최근에 잡은 물고기를 무효화하고 도감 기록을 되돌립니다.")
+def invalidate_last_fish(user_id: int, db: Session = Depends(database.get_db)):
+    """
+    가장 최근의 낚시 결과를 무효화합니다 (Action 전에 취소하는 용도).
+    - 도감 기록 복원 (caught_count 감소 또는 삭제)
+    - 기록을 무효화로 표시
+    """
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # 가장 최근의, 무효화되지 않은 낚시 기록 찾기
+    latest_record = db.query(models.FishingHistory).filter(
+        models.FishingHistory.user_id == user_id,
+        models.FishingHistory.invalidated == False
+    ).order_by(models.FishingHistory.id.desc()).first()
+    
+    if not latest_record:
+        raise HTTPException(status_code=404, detail="무효화할 낚시 기록이 없습니다")
+    
+    # 도감 기록 복원 (쓰레기가 아닌 경우만)
+    species = db.query(models.Species).filter(models.Species.id == latest_record.species_id).first()
+    if species and species.type != 0:  # 쓰레기가 아니면
+        collection = db.query(models.Collection).filter(
+            models.Collection.user_id == user_id,
+            models.Collection.species_id == latest_record.species_id
+        ).first()
+        
+        if collection:
+            if collection.caught_count > 1:
+                collection.caught_count -= 1
+            else:
+                # caught_count가 1이면 기록 삭제
+                db.delete(collection)
+    
+    # 기록을 무효화로 표시
+    latest_record.invalidated = True
+    
+    db.commit()
+    
+    return {
+        "message": f"{species.name}의 낚시 결과를 무효화했습니다." if species else "낚시 결과를 무효화했습니다.",
+        "species_name": species.name if species else None,
+        "species_id": latest_record.species_id
+    }
