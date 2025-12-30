@@ -286,7 +286,15 @@ def handle_action(request: schemas.UserActionRequest, background_tasks: Backgrou
 def generate_message_task(species_id: int, user_id: int):
     # 백그라운드 작업은 별도의 세션을 만들어야 함
     from ..database import SessionLocal
+    import os
+    import requests
+    from datetime import datetime
+    
     db = SessionLocal()
+    
+    API_URL = os.getenv("API_URL")
+    API_KEY = os.getenv("API_KEY")
+    
     try:
         user = db.query(models.User).filter(models.User.id == user_id).first()
         species = db.query(models.Species).filter(models.Species.id == species_id).first()
@@ -294,14 +302,35 @@ def generate_message_task(species_id: int, user_id: int):
         if not user or not species:
             return
 
-        # TODO: 실제 LLM 연동 (현재는 Mock)
-        import time
-        from datetime import datetime
+        # LLM 호출
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json"
+        }
         
-        # LLM 호출 시뮬레이션 (2초 딜레이)
-        time.sleep(2)
+        payload = {
+            "inputs": {
+                "fish_name": species.name,
+                "user_name": user.nickname,
+                "feature": species.description or "특징 없음",
+                "protection": species.type, 
+                "pollution_level": str(user.pollution_level)
+            },
+            "response_mode": "blocking",
+            "user": f"user-{user.id}"
+        }
         
-        content = f"안녕 {user.nickname}! 나는 {species.name}이야. {species.habitat}에 살고 있어. 나를 아쿠아리움에 넣어줘서 고마워!"
+        content = "편지를 쓸 수 없어요."
+        try:
+            print(f"[Letter Generation] Requesting to {API_URL} for {species.name}...")
+            response = requests.post(API_URL, json=payload, headers=headers, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            content = data.get("answer", "편지를 쓸 수 없어요.")
+        except Exception as e:
+            print(f"Error calling LLM API: {e}")
+            # 실패 시 기본 메시지 혹은 별도 처리가 필요하다면 추가
+            content = f"안녕 {user.nickname}! 나는 {species.name}이야. 지금은 너무 바빠서 편지를 길게 못 쓰겠어. 아쿠아리움에 넣어줘서 고마워!"
         
         new_letter = models.FishLetter(
             user_id=user.id,
@@ -315,7 +344,7 @@ def generate_message_task(species_id: int, user_id: int):
         print(f"[Letter Generated] To: {user.nickname}, From: {species.name}")
         
     except Exception as e:
-        print(f"Error generating message: {e}")
+        print(f"Error generating message task: {e}")
     finally:
         db.close()
 
