@@ -49,6 +49,7 @@ class UserResponse(BaseModel):
     nickname: str
     money: int
     pollution_level: int
+    rod_level: int
     
     class Config:
         from_attributes = True
@@ -77,3 +78,18 @@ class CollectionItem(BaseModel):
     
     class Config:
         from_attributes = True
+# --- Aquarium 관련 ---
+class AquariumItem(BaseModel):
+    id: int
+    species_id: int
+    name: str
+    image_url: str
+    caught_at: str
+
+    class Config:
+        from_attributes = True
+
+class AquariumResponse(BaseModel):
+    user_id: int
+    nickname: str
+    fish_list: List[AquariumItem]

@@ -14,7 +14,8 @@ class User(Base):
     rod_level = Column(Integer, default=1)        
     
     collections = relationship("Collection", back_populates="user")
-    inventory = relationship("Inventory", back_populates="user") # 추가됨
+    inventory = relationship("Inventory", back_populates="user")
+    aquarium = relationship("Aquarium", back_populates="user")
 
 class Species(Base):
     __tablename__ = "species"
@@ -60,3 +61,13 @@ class FishingHistory(Base):
     caught_at = Column(String(50))  # ISO timestamp
     was_new = Column(Boolean, default=False)
     invalidated = Column(Boolean, default=False)
+class Aquarium(Base):
+    __tablename__ = "aquarium"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    species_id = Column(Integer, ForeignKey("species.id"))
+    caught_at = Column(String(50))  # ISO timestamp
+
+    user = relationship("User", back_populates="aquarium")
+    species = relationship("Species")

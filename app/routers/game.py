@@ -196,12 +196,20 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
             message = f"{species.name}을(를) 방생했습니다."
 
     elif request.action == schemas.ActionType.AQUARIUM:
-        # 3. 수족관 (AQUARIUM) -> 여기선 특별한 변화 없음 (도감엔 이미 등록됨)
+        # 3. 수족관 (AQUARIUM)
         if species.type == 0:
             money_change = -500 # 벌금
-            message = "쓰레기를 아쿠아리움에 버려서 벌금을 물었습니다!"
-        else: 
-            message = f"{species.name}을(를) 수족관에서 기르기로 했습니다."
+            message = "쓰레기를 아쿠아리움에 추가해 벌금을 납부했습니다."
+        else:
+            # 아쿠아리움에 추가
+            from datetime import datetime
+            new_aquarium_fish = models.Aquarium(
+                user_id=user.id,
+                species_id=species.id,
+                caught_at=datetime.now().isoformat()
+            )
+            db.add(new_aquarium_fish)
+            message = f"{species.name}을(를) 아쿠아리움에 추가했습니다."
 
     # DB 업데이트
     user.money += money_change
