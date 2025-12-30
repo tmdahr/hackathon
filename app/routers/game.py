@@ -159,22 +159,22 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
     # 행동에 따른 로직 분기
     if request.action == schemas.ActionType.SELL:
         # 1. 판매 (SELL)
-        if species.type == "TRASH":
+        if species.type == 0:
             pollution_change = -5 # 청소 효과
             message = "쓰레기를 치워서 바다가 깨끗해졌습니다."
-        elif species.type == "ENDANGERED":
+        elif species.type == 2:
             money_change = -500 # 벌금
             message = "멸종위기종을 팔려다 적발되어 벌금을 물었습니다!"
         else:
-            money_change = species.base_price
-            message = f"{species.name}을(를) 팔아 {species.base_price}원을 벌었습니다."
+            money_change = species.price
+            message = f"{species.name}을(를) 팔아 {species.price}원을 벌었습니다."
             
     elif request.action == schemas.ActionType.RELEASE:
         # 2. 방생 (RELEASE)
-        if species.type == "TRASH":
+        if species.type == 0:
             pollution_change = 10 # 쓰레기 투기
             message = "쓰레기를 다시 버려서 바다가 더러워졌습니다..."
-        elif species.type == "ENDANGERED":
+        elif species.type == 2:
             pollution_change = -10 # 생태계 회복
             money_change = 1000 # 정부 보조금
             message = "멸종위기종을 보호해주어 정부 지원금을 받았습니다!"
@@ -184,7 +184,7 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
 
     elif request.action == schemas.ActionType.AQUARIUM:
         # 3. 수족관 (AQUARIUM) -> 여기선 특별한 변화 없음 (도감엔 이미 등록됨)
-        if species.type == "TRASH":
+        if species.type == 0:
             money_change = -500 # 벌금
             message = "쓰레기를 아쿠아리움에 버려서 벌금을 물었습니다!"
         else: 
