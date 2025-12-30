@@ -17,6 +17,7 @@ class User(Base):
     inventory = relationship("Inventory", back_populates="user")
     aquarium = relationship("Aquarium", back_populates="user")
     habitat_pollutions = relationship("HabitatPollution", back_populates="user")
+    letters = relationship("FishLetter", back_populates="user")
 
 class Species(Base):
     __tablename__ = "species"
@@ -83,3 +84,16 @@ class HabitatPollution(Base):
     pollution_level = Column(Integer, default=80)
 
     user = relationship("User", back_populates="habitat_pollutions")
+
+class FishLetter(Base):
+    __tablename__ = "fish_letters"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    species_id = Column(Integer, ForeignKey("species.id"))
+    content = Column(String(1000)) # 편지 내용
+    is_read = Column(Boolean, default=False)
+    created_at = Column(String(50)) # ISO timestamp
+
+    user = relationship("User", back_populates="letters")
+    species = relationship("Species")
