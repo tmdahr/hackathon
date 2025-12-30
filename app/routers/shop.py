@@ -1,8 +1,8 @@
 # app/routers/shop.py (전체 덮어쓰기)
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from .. import models, schemas, database
 
 router = APIRouter(
@@ -60,8 +60,48 @@ def get_inventory(user_id: int, db: Session = Depends(database.get_db)):
     result.sort(key=lambda x: x["rod_level"])
     return result
 
-@router.post("/buy", summary="아이템 구매", description="돈을 사용하여 상점에서 낚싯대를 구매하고 장착합니다. 이미 보유한 아이템은 장착만 수행됩니다.")
-def buy_item(user_id: int, item_id: int, db: Session = Depends(database.get_db)):
+@router.post("/buy", summary="아이템 구매", description="돈을 사용하여 상점에서 낚싯대를 구매하고 장착합니다. JSON Body, Query Parameter, Form Data 형식을 모두 지원합니다.")
+async def buy_item(request: Request, db: Session = Depends(database.get_db)):
+    user_id = None
+    item_id = None
+
+    # 1. Query Parameter 확인
+    user_id = request.query_params.get("user_id")
+    item_id = request.query_params.get("item_id")
+
+    # 2. JSON Body 확인
+    if user_id is None or item_id is None:
+        try:
+            body = await request.json()
+            if user_id is None:
+                user_id = body.get("user_id") or body.get("userId")
+            if item_id is None:
+                item_id = body.get("item_id") or body.get("itemId")
+        except:
+            pass
+
+    # 3. Form Data 확인
+    if user_id is None or item_id is None:
+        try:
+            form = await request.form()
+            if user_id is None:
+                user_id = form.get("user_id") or form.get("userId")
+            if item_id is None:
+                item_id = form.get("item_id") or form.get("itemId")
+        except:
+            pass
+
+    # 필수값 체크 및 타입 변환
+    if user_id is None or item_id is None:
+        raise HTTPException(status_code=422, detail="user_id와 item_id가 필요합니다.")
+    
+    try:
+        user_id = int(user_id)
+        item_id = int(item_id)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=422, detail="user_id와 item_id는 숫자여야 합니다.")
+
+    # 비즈니스 로직
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -70,7 +110,6 @@ def buy_item(user_id: int, item_id: int, db: Session = Depends(database.get_db))
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    # 1. 이미 인벤토리에 있는지 확인
     owned_item = db.query(models.Inventory).filter(
         models.Inventory.user_id == user.id,
         models.Inventory.item_id == item_id
@@ -86,7 +125,6 @@ def buy_item(user_id: int, item_id: int, db: Session = Depends(database.get_db))
             "rod_level": user.rod_level
         }
 
-    # 2. 없는 거라면 -> 돈 내고 구매
     if user.money < item["price"]:
         raise HTTPException(status_code=400, detail="돈이 부족합니다!")
         
