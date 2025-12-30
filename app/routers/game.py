@@ -31,13 +31,13 @@ def select_species_type_by_pollution(pollution: int, rod_level: int):
 
     # 2. 낚싯대 레벨에 따른 확률 보정
     if rod_level == 2:  # 카본 낚싯대
-        weights[0] = max(0, weights[0] - 3) # 쓰레기 -3%
-        weights[1] += 5                     # 일반 +5% (Index 1 is Normal)
+        weights[0] = max(0, weights[0] - 5) # 쓰레기 -5%
+        weights[1] += 4                     # 일반 +4% (Index 1 is Normal)
         weights[2] += 1                     # 멸종위기 +1% (Index 2 is Endangered)
         # 잔여 확률 보정 생략
         
     elif rod_level >= 3: # 티타늄 낚싯대 (3레벨 이상)
-        weights[0] = max(0, weights[0] - 5) # 쓰레기 -5%
+        weights[0] = max(0, weights[0] - 10) # 쓰레기 -10%
         weights[1] += 7                     # 일반 +7%
         weights[2] += 3                     # 멸종위기 +3%
 
