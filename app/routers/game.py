@@ -202,6 +202,8 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
             message = "쓰레기를 아쿠아리움에 버려서 벌금을 물었습니다!"
         else: 
             message = f"{species.name}을(를) 수족관에서 기르기로 했습니다."
+            if random.random() < 0.3:
+                generate_message(species, user)
 
     # DB 업데이트
     user.money += money_change
