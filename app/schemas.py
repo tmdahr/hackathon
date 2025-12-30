@@ -54,3 +54,14 @@ class ShopItem(BaseModel):
 class BuyRequest(BaseModel):
     user_id: int
     item_id: int
+
+class CollectionItem(BaseModel):
+    species_id: int
+    name: str          # 잡았으면 이름, 못 잡았으면 "???"
+    type: str          # 물고기 등급 (일반, 희귀 등)
+    image_url: str     # 이미지 주소
+    caught_count: int  # 잡은 횟수 (없으면 0)
+    is_caught: bool    # 잡은 적 있는지 여부
+    
+    class Config:
+        from_attributes = True

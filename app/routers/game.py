@@ -154,3 +154,54 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
         "current_money": user.money,
         "current_pollution": user.pollution_level
     }
+
+from typing import List # 리스트 출력을 위해 필요
+
+@router.get("/collection/{user_id}", response_model=List[schemas.CollectionItem])
+def get_collection(user_id: int, db: Session = Depends(database.get_db)):
+    # 1. 게임의 모든 물고기 종류 가져오기
+    all_species = db.query(models.Species).all()
+    
+    # 2. 해당 유저가 잡은 기록 가져오기
+    user_collections = db.query(models.Collection).filter(models.Collection.user_id == user_id).all()
+    
+    # 3. 잡은 기록을 쉽게 찾기 위해 딕셔너리로 변환 (Key: species_id, Value: Collection객체)
+    collected_dict = {c.species_id: c for c in user_collections}
+    
+    result = []
+    
+    # 4. 모든 물고기를 하나씩 돌면서 확인
+    for species in all_species:
+        # 이 물고기를 잡은 적이 있는가?
+        record = collected_dict.get(species.id)
+        
+        if record:
+            # 잡은 적 있음 -> 정보 다 보여줌
+            result.append({
+                "species_id": species.id,
+                "name": species.name,
+                "type": get_type_name(species.type), # 아래 도우미 함수 사용
+                "image_url": species.image_url,
+                "caught_count": record.caught_count,
+                "is_caught": True
+            })
+        else:
+            # 잡은 적 없음 -> 비밀 처리
+            result.append({
+                "species_id": species.id,
+                "name": "???",       # 이름 가리기
+                "type": "알 수 없음", # 등급 가리기
+                "image_url": "",     # 이미지 가리기 (또는 물음표 이미지 URL)
+                "caught_count": 0,
+                "is_caught": False
+            })
+            
+    return result
+
+# [도우미 함수] 숫자 타입(0,1,2,3)을 글자로 바꿔주는 함수
+def get_type_name(type_code: int):
+    if type_code == 0: return "쓰레기"
+    if type_code == 1: return "생태계 교란종"
+    if type_code == 2: return "일반 물고기"
+    if type_code == 3: return "멸종위기종"
+    return "기타"
