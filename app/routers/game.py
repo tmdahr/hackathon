@@ -48,45 +48,57 @@ def fishing(user_id: int, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    # [수정됨] 확률 계산 시 유저의 rod_level도 같이 전달!
+    
+    # 1. 어떤 등급의 물고기가 잡힐지 결정 (이제 여기서 숫자 0,1,2,3이 나옵니다)
     target_type = select_species_type_by_pollution(user.pollution_level, user.rod_level)
-
-    available_species = db.query(models.Species).filter(models.Species.type == target_type.value).all()
+    
+    # [수정된 부분] target_type.value -> target_type 으로 변경!
+    available_species = db.query(models.Species).filter(models.Species.type == target_type).all()
     
     if not available_species:
-        available_species = db.query(models.Species).all()
-
-    caught_species = random.choice(available_species)
-
-    # ... (이하 도감 업데이트 로직은 기존과 동일) ...
+        return {"message": "아무것도 잡히지 않았습니다... (해당 등급의 물고기 데이터가 DB에 없음)"}
+    
+    # 2. 해당 등급 내에서 랜덤으로 하나 선택
+    caught_fish = random.choice(available_species)
+    
+    # 3. 도감(Collection)에 저장
     collection = db.query(models.Collection).filter(
         models.Collection.user_id == user.id,
-        models.Collection.species_id == caught_species.id
+        models.Collection.species_id == caught_fish.id
     ).first()
-
-    is_new_catch = False
-    if collection:
-        collection.caught_count += 1
+    
+    is_new = False
+    if not collection:
+        collection = models.Collection(user_id=user.id, species_id=caught_fish.id, caught_count=1)
+        db.add(collection)
+        is_new = True
     else:
-        new_collection = models.Collection(
-            user_id=user.id,
-            species_id=caught_species.id,
-            is_new=True,
-            caught_count=1
-        )
-        db.add(new_collection)
-        is_new_catch = True
+        collection.caught_count += 1
+        collection.is_new = False # 이미 잡은 적 있으니 False
+    
+    # 4. 보상 지급 (돈, 오염도 변화) 및 저장
+    user.money += caught_fish.price
+    
+    # 오염도 변화 (쓰레기 잡으면 청소됨, 아니면 그대로)
+    if caught_fish.type == 0: # 쓰레기
+        user.pollution_level = max(0, user.pollution_level - 5)
     
     db.commit()
-
-    return schemas.FishResponse(
-        species_name=caught_species.name,
-        species_type=caught_species.type,
-        image_url=caught_species.image_url,
-        is_new=is_new_catch,
-        pollution_level=user.pollution_level
-    )
+    
+    return {
+        "message": f"낚시 성공! {caught_fish.name}을(를) 잡았습니다.",
+        "fish": {
+            "name": caught_fish.name,
+            "type": caught_fish.type, # 0:쓰레기, 1:교란종, 2:일반, 3:멸종위기
+            "price": caught_fish.price,
+            "image_url": caught_fish.image_url
+        },
+        "is_new": is_new,
+        "user_status": {
+            "money": user.money,
+            "pollution_level": user.pollution_level
+        }
+    }
 
 @router.post("/action")
 def handle_action(request: schemas.UserActionRequest, db: Session = Depends(database.get_db)):
@@ -183,7 +195,8 @@ def get_collection(user_id: int, db: Session = Depends(database.get_db)):
                 "type": get_type_name(species.type), # 아래 도우미 함수 사용
                 "image_url": species.image_url,
                 "caught_count": record.caught_count,
-                "is_caught": True
+                "is_caught": True,
+                "habitat": species.habitat
             })
         else:
             # 잡은 적 없음 -> 비밀 처리
@@ -193,7 +206,8 @@ def get_collection(user_id: int, db: Session = Depends(database.get_db)):
                 "type": "알 수 없음", # 등급 가리기
                 "image_url": "",     # 이미지 가리기 (또는 물음표 이미지 URL)
                 "caught_count": 0,
-                "is_caught": False
+                "is_caught": False,
+                "habitat": "???"
             })
             
     return result

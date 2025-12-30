@@ -24,6 +24,9 @@ class Species(Base):
     type = Column(Integer) 
     price = Column(Integer)
     image_url = Column(String(255))
+
+    habitat = Column(String(50), default="알 수 없음")
+    description = Column(String(1000))
     
     collections = relationship("Collection", back_populates="species")
 

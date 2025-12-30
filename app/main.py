@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from .database import engine, Base
 # 1. 여기서 파일을 가져와야 합니다.
 from .routers import game, users, shop 
@@ -12,6 +13,8 @@ app = FastAPI()
 app.include_router(game.router)
 app.include_router(users.router)
 app.include_router(shop.router) 
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 @app.get("/")
 def read_root():

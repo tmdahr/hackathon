@@ -9,12 +9,22 @@ class SpeciesType(str, Enum):
     ENDANGERED = "ENDANGERED"
 
 # 낚시 결과 반환용
+# 낚시 결과 반환용
+class FishDetail(BaseModel):
+    name: str
+    type: int
+    price: int
+    image_url: str
+
+class UserStatus(BaseModel):
+    money: int
+    pollution_level: int
+
 class FishResponse(BaseModel):
-    species_name: str
-    species_type: SpeciesType
-    image_url: Optional[str] = None
-    is_new: bool
-    pollution_level: int # 현재 오염도도 같이 주면 프론트가 편함
+    message: str
+    fish: Optional[FishDetail] = None
+    is_new: Optional[bool] = False
+    user_status: Optional[UserStatus] = None
 
     class Config:
         from_attributes = True
@@ -62,6 +72,7 @@ class CollectionItem(BaseModel):
     image_url: str     # 이미지 주소
     caught_count: int  # 잡은 횟수 (없으면 0)
     is_caught: bool    # 잡은 적 있는지 여부
+    habitat: str # [새로 추가] 서식지 정보
     
     class Config:
         from_attributes = True
