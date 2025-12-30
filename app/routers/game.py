@@ -146,8 +146,9 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     return {
         "message": f"낚시 성공! {caught_fish.name}을(를) 잡았습니다.",
         "fish": {
+            "id": caught_fish.id, # 추가: 물고기 종 ID
             "name": caught_fish.name,
-            "type": caught_fish.type, # 0:쓰레기, 1:교란종, 2:일반, 3:멸종위기
+            "type": caught_fish.type, # 0:쓰레기, 1:일반 해양 생물, 2:멸종위기종
             "price": caught_fish.price,
             "image_url": caught_fish.image_url,
             "habitat": caught_fish.habitat

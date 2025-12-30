@@ -10,6 +10,7 @@ class SpeciesType(str, Enum):
 # 낚시 결과 반환용
 # 낚시 결과 반환용
 class FishDetail(BaseModel):
+    id: int # 추가: 물고기 종 ID
     name: str
     type: int
     price: int
