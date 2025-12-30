@@ -126,14 +126,8 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
         # 쓰레기는 도감에 기록하지 않음
         pass
     
-    # 4. 보상 지급 (돈, 오염도 변화) 및 저장
-    user.money += caught_fish.price
-    
-    # 오염도 변화 (쓰레기 잡으면 해당 서식지 청소됨)
-    habitat_pollution_change = 0
-    if caught_fish.type == 0: # 쓰레기
-        habitat_pollution_change = -5
-        habitat_pollution.pollution_level = max(0, habitat_pollution.pollution_level - 5)
+    # 4. 보상 및 오염도 변화는 이제 handle_action에서 처리함
+    # fishing 단계에서는 도감 등록 및 히스토리 기록만 수행
     
     # 5. 낚시 기록 저장 (무효화를 위해)
     from datetime import datetime
@@ -342,16 +336,6 @@ def invalidate_last_fish(user_id: int, db: Session = Depends(database.get_db)):
                 collection.caught_count -= 1
             else:
                 db.delete(collection)
-    else:
-        # 쓰레기였던 경우: 낚시 단계에서 감소했던 오염도 복구 (+5)
-        if latest_record.habitat:
-            hp = db.query(models.HabitatPollution).filter(
-                models.HabitatPollution.user_id == user_id,
-                models.HabitatPollution.habitat_name == latest_record.habitat
-            ).first()
-            if hp:
-                hp.pollution_level = min(100, hp.pollution_level + 5)
-    
     # 기록을 무효화로 표시
     latest_record.invalidated = True
     
