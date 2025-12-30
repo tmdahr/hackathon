@@ -19,6 +19,25 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+
+    # 모든 서식지에 대해 초기 오염도 설정
+    from .game import select_species_type_by_pollution # 혹시 필요하면 (근데 여기선 그냥 이름만 필요)
+    # 실제 서식지 목록 가져오기
+    habitats = db.query(models.Species.habitat).distinct().all()
+    habitat_names = [h[0] for h in habitats if h[0]]
+    if "쓰레기" not in habitat_names:
+        habitat_names.append("쓰레기")
+
+    for h_name in habitat_names:
+        new_hp = models.HabitatPollution(
+            user_id=new_user.id,
+            habitat_name=h_name,
+            pollution_level=80 # 기본값
+        )
+        db.add(new_hp)
+    
+    db.commit()
+    db.refresh(new_user)
     return new_user
 
 # 2. 모든 사용자 목록 보기 (랭킹 대신 변경됨)

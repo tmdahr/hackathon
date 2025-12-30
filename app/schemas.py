@@ -10,6 +10,7 @@ class SpeciesType(str, Enum):
 # 낚시 결과 반환용
 # 낚시 결과 반환용
 class FishDetail(BaseModel):
+    id: int # 추가: 물고기 종 ID
     name: str
     type: int
     price: int
@@ -18,7 +19,7 @@ class FishDetail(BaseModel):
 
 class UserStatus(BaseModel):
     money: int
-    pollution_level: int
+    habitat_pollution: int # 해당 서식지의 오염도
 
 class FishResponse(BaseModel):
     message: str
@@ -39,6 +40,7 @@ class UserActionRequest(BaseModel):
     user_id: int
     species_id: int
     action: ActionType
+    habitat: str # 추가: 어떤 서식지에서 행동을 취하는지
 
 # --- User 관련 ---
 class UserCreate(BaseModel):
@@ -48,7 +50,8 @@ class UserResponse(BaseModel):
     id: int
     nickname: str
     money: int
-    pollution_level: int
+    rod_level: int
+    habitat_pollutions: List['HabitatPollutionSchema'] = []
     
     class Config:
         from_attributes = True
@@ -77,3 +80,28 @@ class CollectionItem(BaseModel):
     
     class Config:
         from_attributes = True
+# --- Aquarium 관련 ---
+class AquariumItem(BaseModel):
+    id: int
+    species_id: int
+    name: str
+    image_url: str
+    caught_at: str
+
+    class Config:
+        from_attributes = True
+
+class AquariumResponse(BaseModel):
+    user_id: int
+    nickname: str
+    fish_list: List[AquariumItem]
+
+# --- Habitat Pollution 관련 ---
+class HabitatPollutionSchema(BaseModel):
+    habitat_name: str
+    pollution_level: int
+
+    class Config:
+        from_attributes = True
+
+UserResponse.update_forward_refs()

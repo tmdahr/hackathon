@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .database import engine, Base
 # 1. 여기서 파일을 가져와야 합니다.
-from .routers import game, users, shop 
+from .routers import game, users, shop, aquarium
 
 # DB 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -22,6 +22,7 @@ app.add_middleware(
 app.include_router(game.router)
 app.include_router(users.router)
 app.include_router(shop.router) 
+app.include_router(aquarium.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 

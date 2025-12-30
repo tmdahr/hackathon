@@ -14,7 +14,9 @@ class User(Base):
     rod_level = Column(Integer, default=1)        
     
     collections = relationship("Collection", back_populates="user")
-    inventory = relationship("Inventory", back_populates="user") # 추가됨
+    inventory = relationship("Inventory", back_populates="user")
+    aquarium = relationship("Aquarium", back_populates="user")
+    habitat_pollutions = relationship("HabitatPollution", back_populates="user")
 
 class Species(Base):
     __tablename__ = "species"
@@ -57,6 +59,27 @@ class FishingHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
     species_id = Column(Integer, ForeignKey("species.id"))
+    habitat = Column(String(50)) # 잡힌 서식지
     caught_at = Column(String(50))  # ISO timestamp
     was_new = Column(Boolean, default=False)
     invalidated = Column(Boolean, default=False)
+class Aquarium(Base):
+    __tablename__ = "aquarium"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    species_id = Column(Integer, ForeignKey("species.id"))
+    caught_at = Column(String(50))  # ISO timestamp
+
+    user = relationship("User", back_populates="aquarium")
+    species = relationship("Species")
+
+class HabitatPollution(Base):
+    __tablename__ = "habitat_pollution"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    habitat_name = Column(String(50))
+    pollution_level = Column(Integer, default=80)
+
+    user = relationship("User", back_populates="habitat_pollutions")

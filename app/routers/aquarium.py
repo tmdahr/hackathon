@@ -1,32 +1,34 @@
-import requests
-from app.models import Species, User
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+from typing import List
+from .. import models, schemas, database
 
-API_URL = os.getenv("API_URL")
-API_KEY = os.getenv("API_KEY")
+router = APIRouter(
+    prefix="/aquarium",
+    tags=["aquarium"]
+)
 
-def generate_message(species: Species, user: User) -> str:
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
+@router.get("/{user_id}", response_model=schemas.AquariumResponse, summary="아쿠아리움 목록 조회", description="유저의 아쿠아리움에 있는 물고기 목록을 조회합니다.")
+def get_aquarium(user_id: int, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     
-    payload = {
-        "inputs": {
-            "fish_name": species.name,
-            "user_name": user.nickname,
-            "feature": species.description,
-            "protection": species.type, 
-            "pollution_level": str(user.pollution_level)
-        },
-        "response_mode": "blocking",
-        "user": f"user-{user.id}"
-    }
+    # 아쿠아리움 아이템 조회 (Species 정보 포함)
+    aquarium_items = db.query(models.Aquarium).filter(models.Aquarium.user_id == user_id).all()
     
-    try:
-        response = requests.post(API_URL, json=payload, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        return data.get("answer", "편지를 쓸 수 없어요.")
-    except Exception as e:
-        print(f"Error generating message: {e}")
-        return "편지를 쓰는 도중 문제가 발생했어요."
+    fish_list = []
+    for item in aquarium_items:
+        fish_list.append(schemas.AquariumItem(
+            id=item.id,
+            species_id=item.species_id,
+            name=item.species.name,
+            image_url=item.species.image_url,
+            caught_at=item.caught_at
+        ))
+    
+    return schemas.AquariumResponse(
+        user_id=user.id,
+        nickname=user.nickname,
+        fish_list=fish_list
+    )
