@@ -226,7 +226,7 @@ def get_collection(user_id: int, db: Session = Depends(database.get_db)):
                 "species_id": species.id,
                 "name": "???",       # 이름 가리기
                 "type": "알 수 없음", # 등급 가리기
-                "image_url": "",     # 이미지 가리기 (또는 물음표 이미지 URL)
+                "image_url": "/static/images/question_mark.png",
                 "caught_count": 0,
                 "is_caught": False,
                 "habitat": "???"
