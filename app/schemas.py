@@ -18,7 +18,7 @@ class FishDetail(BaseModel):
 
 class UserStatus(BaseModel):
     money: int
-    pollution_level: int
+    habitat_pollution: int # 해당 서식지의 오염도
 
 class FishResponse(BaseModel):
     message: str
@@ -39,6 +39,7 @@ class UserActionRequest(BaseModel):
     user_id: int
     species_id: int
     action: ActionType
+    habitat: str # 추가: 어떤 서식지에서 행동을 취하는지
 
 # --- User 관련 ---
 class UserCreate(BaseModel):
@@ -48,8 +49,8 @@ class UserResponse(BaseModel):
     id: int
     nickname: str
     money: int
-    pollution_level: int
     rod_level: int
+    habitat_pollutions: List['HabitatPollutionSchema'] = []
     
     class Config:
         from_attributes = True
@@ -93,3 +94,13 @@ class AquariumResponse(BaseModel):
     user_id: int
     nickname: str
     fish_list: List[AquariumItem]
+
+# --- Habitat Pollution 관련 ---
+class HabitatPollutionSchema(BaseModel):
+    habitat_name: str
+    pollution_level: int
+
+    class Config:
+        from_attributes = True
+
+UserResponse.update_forward_refs()

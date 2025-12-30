@@ -56,11 +56,26 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # 1. 어떤 등급의 물고기가 잡힐지 결정 (이제 여기서 숫자 0,1,2가 나옵니다)
-    target_type = select_species_type_by_pollution(user.pollution_level, user.rod_level)
+    # 1. 서식지별 오염도 가져오기
+    habitat_pollution = db.query(models.HabitatPollution).filter(
+        models.HabitatPollution.user_id == user.id,
+        models.HabitatPollution.habitat_name == habitat
+    ).first()
     
-    # [수정된 부분] target_type.value -> target_type 으로 변경!
-    # habitat 필터 추가
+    if not habitat_pollution:
+        # 혹시 모르니 초기화 (마이그레이션 누락 대비)
+        habitat_pollution = models.HabitatPollution(
+            user_id=user.id,
+            habitat_name=habitat,
+            pollution_level=user.pollution_level
+        )
+        db.add(habitat_pollution)
+        db.commit()
+    
+    # 등급 결정 (서식지별 오염도 사용)
+    target_type = select_species_type_by_pollution(habitat_pollution.pollution_level, user.rod_level)
+    
+    # [수정된 부분] habitat 필터 추가
     # 단, 쓰레기(type=0)는 서식지 상관없이 낚여야 함 & 낚싯대 레벨에 따른 정화가 필요할 수도 있음(기획 필요, 일단 유지)
     
     query = db.query(models.Species)
@@ -114,17 +129,18 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     # 4. 보상 지급 (돈, 오염도 변화) 및 저장
     user.money += caught_fish.price
     
-    # 오염도 변화 (쓰레기 잡으면 청소됨, 아니면 그대로)
-    pollution_change = 0
+    # 오염도 변화 (쓰레기 잡으면 해당 서식지 청소됨)
+    habitat_pollution_change = 0
     if caught_fish.type == 0: # 쓰레기
-        pollution_change = -5
-        user.pollution_level = max(0, user.pollution_level - 5)
+        habitat_pollution_change = -5
+        habitat_pollution.pollution_level = max(0, habitat_pollution.pollution_level - 5)
     
     # 5. 낚시 기록 저장 (무효화를 위해)
     from datetime import datetime
     fishing_record = models.FishingHistory(
         user_id=user.id,
         species_id=caught_fish.id,
+        habitat=habitat, # 잡힌 서식지 저장
         caught_at=datetime.now().isoformat(),
         was_new=is_new,
         invalidated=False
@@ -145,7 +161,7 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
         "is_new": is_new,
         "user_status": {
             "money": user.money,
-            "pollution_level": user.pollution_level
+            "habitat_pollution": habitat_pollution.pollution_level
         }
     }
 
@@ -168,13 +184,21 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
     message = ""
     money_change = 0
     pollution_change = 0
+    habitat_name = request.habitat
 
+    # 어떤 서식지에서 잡혔는지 히스토리에서 확인
+    history = db.query(models.FishingHistory).filter(
+        models.FishingHistory.user_id == user.id,
+        models.FishingHistory.species_id == species.id,
+        models.FishingHistory.invalidated == False
+    ).order_by(models.FishingHistory.id.desc()).first()
+    
     # 행동에 따른 로직 분기
     if request.action == schemas.ActionType.SELL:
         # 1. 판매 (SELL)
         if species.type == 0:
             pollution_change = -5 # 청소 효과
-            message = "쓰레기를 치워서 바다가 깨끗해졌습니다."
+            message = f"쓰레기를 치워서 {habitat_name}이(가) 깨끗해졌습니다."
         elif species.type == 2:
             money_change = -500 # 벌금
             message = "멸종위기종을 팔려다 적발되어 벌금을 물었습니다!"
@@ -186,7 +210,7 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
         # 2. 방생 (RELEASE)
         if species.type == 0:
             pollution_change = 10 # 쓰레기 투기
-            message = "쓰레기를 다시 버려서 바다가 더러워졌습니다..."
+            message = f"쓰레기를 다시 버려서 {habitat_name}이(가) 더러워졌습니다..."
         elif species.type == 2:
             pollution_change = -10 # 생태계 회복
             money_change = 1000 # 정부 보조금
@@ -211,9 +235,19 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
             db.add(new_aquarium_fish)
             message = f"{species.name}을(를) 아쿠아리움에 추가했습니다."
 
-    # DB 업데이트
+
+    # DB 업데이트 (서식지별 오염도)
+    habitat_pollution = db.query(models.HabitatPollution).filter(
+        models.HabitatPollution.user_id == user.id,
+        models.HabitatPollution.habitat_name == habitat_name
+    ).first()
+    
+    if habitat_pollution:
+        habitat_pollution.pollution_level = max(0, min(100, habitat_pollution.pollution_level + pollution_change))
+
     user.money += money_change
-    user.pollution_level = max(0, min(100, user.pollution_level + pollution_change)) # 0~100 사이 유지
+    # user.pollution_level 은 이제 사용하지 않거나 전체 평균용으로만 둘 수 있음.
+    # 일단 개별 서식지 오염도만 업데이트함.
     
     db.commit()
 
@@ -296,20 +330,27 @@ def invalidate_last_fish(user_id: int, db: Session = Depends(database.get_db)):
     if not latest_record:
         raise HTTPException(status_code=404, detail="무효화할 낚시 기록이 없습니다")
     
-    # 도감 기록 복원 (쓰레기가 아닌 경우만)
-    species = db.query(models.Species).filter(models.Species.id == latest_record.species_id).first()
-    if species and species.type != 0:  # 쓰레기가 아니면
+    # 도감 기록 복원
+    species_obj = db.query(models.Species).filter(models.Species.id == latest_record.species_id).first()
+    if species_obj and species_obj.type != 0:  # 쓰레기가 아니면 도감 횟수 차감
         collection = db.query(models.Collection).filter(
             models.Collection.user_id == user_id,
             models.Collection.species_id == latest_record.species_id
         ).first()
-        
         if collection:
             if collection.caught_count > 1:
                 collection.caught_count -= 1
             else:
-                # caught_count가 1이면 기록 삭제
                 db.delete(collection)
+    else:
+        # 쓰레기였던 경우: 낚시 단계에서 감소했던 오염도 복구 (+5)
+        if latest_record.habitat:
+            hp = db.query(models.HabitatPollution).filter(
+                models.HabitatPollution.user_id == user_id,
+                models.HabitatPollution.habitat_name == latest_record.habitat
+            ).first()
+            if hp:
+                hp.pollution_level = min(100, hp.pollution_level + 5)
     
     # 기록을 무효화로 표시
     latest_record.invalidated = True
