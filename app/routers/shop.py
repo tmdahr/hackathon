@@ -11,7 +11,6 @@ router = APIRouter(
 )
 
 # 상점 아이템 목록
-# 상점 아이템 목록
 SHOP_ITEMS = {
     0: {"name": "기본 낚싯대 (Lv.1)", "price": 0, "level": 1, "desc": "가장 기본적인 나무 낚싯대입니다."},
     1: {"name": "카본 낚싯대 (Lv.2)", "price": 2000, "level": 2, "desc": "쓰레기 -5%, 일반 물고기 +4%, 멸종 위기종 +1%"},
@@ -37,20 +36,14 @@ def get_inventory(user_id: int, db: Session = Depends(database.get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 유저의 인벤토리 조회
     user_inventory = db.query(models.Inventory).filter(models.Inventory.user_id == user_id).all()
-    
-    # 보유한 아이템 ID 집합
     owned_ids = {item.item_id for item in user_inventory}
-    
-    # 기본 낚싯대(0번)는 항상 보유한 것으로 처리 (시스템 기본 지급 정책)
     owned_ids.add(0)
     
     result = []
     current_rod_level = user.rod_level
     
     for item_id in owned_ids:
-        # SHOP_ITEMS에 정의된 아이템인 경우만 처리
         if item_id in SHOP_ITEMS:
             data = SHOP_ITEMS[item_id]
             is_equipped = (data["level"] == current_rod_level)
@@ -64,9 +57,7 @@ def get_inventory(user_id: int, db: Session = Depends(database.get_db)):
                 "is_equipped": is_equipped
             })
     
-    # 레벨 순 정렬
     result.sort(key=lambda x: x["rod_level"])
-    
     return result
 
 @router.post("/buy", summary="아이템 구매", description="돈을 사용하여 상점에서 낚싯대를 구매하고 장착합니다. 이미 보유한 아이템은 장착만 수행됩니다.")
@@ -86,25 +77,22 @@ def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)
     ).first()
 
     if owned_item:
-        # 이미 샀던 거라면 -> 돈 안 들고 장착만!
         user.rod_level = item["level"]
         db.commit()
         db.refresh(user)
         return {
             "message": f"{item['name']}을(를) 장착했습니다! (이미 보유중)",
-            "current_money": user.money,
-            "current_rod_level": user.rod_level
+            "money": user.money,
+            "rod_level": user.rod_level
         }
 
     # 2. 없는 거라면 -> 돈 내고 구매
     if user.money < item["price"]:
         raise HTTPException(status_code=400, detail="돈이 부족합니다!")
         
-    # 결제 및 장착
     user.money -= item["price"]
     user.rod_level = item["level"]
     
-    # 인벤토리에 추가 (영수증)
     new_inventory = models.Inventory(user_id=user.id, item_id=request.item_id)
     db.add(new_inventory)
     
@@ -113,6 +101,6 @@ def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)
     
     return {
         "message": f"{item['name']} 구매 성공! 낚싯대가 장착되었습니다.",
-        "current_money": user.money,
-        "current_rod_level": user.rod_level
+        "money": user.money,
+        "rod_level": user.rod_level
     }
