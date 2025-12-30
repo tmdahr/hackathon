@@ -73,6 +73,7 @@ class CollectionItem(BaseModel):
     caught_count: int  # 잡은 횟수 (없으면 0)
     is_caught: bool    # 잡은 적 있는지 여부
     habitat: str # [새로 추가] 서식지 정보
+    DstcftCn: str = "" # [새로 추가] 특징 (설명)
     
     class Config:
         from_attributes = True

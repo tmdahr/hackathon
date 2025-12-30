@@ -16,7 +16,7 @@ SHOP_ITEMS = {
     2: {"name": "티타늄 낚싯대 (Lv.3)", "price": 5000, "level": 3, "desc": "쓰레기 -5%, 일반 물고기 +7%, 멸종 위기종 +3%"}
 }
 
-@router.get("/items")
+@router.get("/items", summary="상점 아이템 목록 조회", description="구매 가능한 낚싯대 목록을 조회합니다. 각 낚싯대의 효과(쓰레기 감소, 좋은 물고기 확률 증가)를 확인할 수 있습니다.")
 def get_items():
     items = []
     for id, data in SHOP_ITEMS.items():
@@ -29,7 +29,7 @@ def get_items():
         })
     return items
 
-@router.post("/buy")
+@router.post("/buy", summary="아이템 구매", description="돈을 사용하여 상점에서 낚싯대를 구매하고 장착합니다. 이미 보유한 아이템은 장착만 수행됩니다.")
 def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.id == request.user_id).first()
     if not user:

@@ -14,20 +14,19 @@ def select_species_type_by_pollution(pollution: int, rod_level: int):
         rod_level = 1
 
     # 1. 기본 확률 설정 (오염도에 따라 다름)
-    # 1. 기본 확률 설정 (오염도에 따라 다름)
     # 순서: [0:쓰레기, 1:일반, 2:멸종위기] (번호 변경됨)
     if pollution >= 80:
         # 매우 더러움
-        weights = [60, 40, 0] 
-    elif pollution >= 50:
+        weights = [70, 30, 0] 
+    elif pollution >= 60:
         # 보통
-        weights = [40, 55, 5]
-    elif pollution >= 20:
+        weights = [60, 45, 5]
+    elif pollution >= 40:
         # 깨끗함
         weights = [20, 65, 15]
     else:
         # 매우 깨끗함
-        weights = [5, 65, 30]
+        weights = [5, 65, 25]
 
     # 2. 낚싯대 레벨에 따른 확률 보정
     if rod_level == 2:  # 카본 낚싯대
@@ -46,7 +45,12 @@ def select_species_type_by_pollution(pollution: int, rod_level: int):
     return random.choices([0, 1, 2], weights=weights, k=1)[0]
 
 
-@router.post("/fish", response_model=schemas.FishResponse)
+@router.post("/fish", response_model=schemas.FishResponse, summary="낚시하기", description="""
+서식지(Habitat)에서 낚시를 진행합니다.
+- **확률**: 오염도와 낚싯대 등급에 따라 쓰레기/일반/멸종위기종 확률이 결정됩니다.
+- **로직**: 서식지에 맞는 물고기를 랜덤하게 낚습니다. 만약 해당 등급 물고기가 없으면 일반 물고기로 대체됩니다.
+- **결과**: 잡은 물고기 정보와 도감 등록 여부, 유저의 상태 변화를 반환합니다.
+""")
 def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
@@ -128,7 +132,12 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
         }
     }
 
-@router.post("/action")
+@router.post("/action", summary="낚시 후 행동 선택", description="""
+낚시로 잡은 물고기에 대해 행동(판매/방생/수족관)을 선택합니다.
+- **판매**: 돈을 획득합니다. (쓰레기는 오염도 감소)
+- **방생**: 오염도가 감소하거나(일반/멸종위기), 증가합니다(쓰레기).
+- **수족관**: 특별한 효과는 없으나 도감에 기록됩니다 (현재는 판매와 유사).
+""")
 def handle_action(request: schemas.UserActionRequest, db: Session = Depends(database.get_db)):
     """
     유저가 낚시 후 선택한 행동(판매, 방생, 수족관)을 처리하는 API
@@ -191,7 +200,7 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
 
 from typing import List # 리스트 출력을 위해 필요
 
-@router.get("/collection/{user_id}", response_model=List[schemas.CollectionItem])
+@router.get("/collection/{user_id}", response_model=List[schemas.CollectionItem], summary="유저 도감 조회", description="유저가 잡은 물고기 도감을 조회합니다. 잡지 못한 물고기는 ???로 표시됩니다.")
 def get_collection(user_id: int, db: Session = Depends(database.get_db)):
     # 1. 게임의 모든 물고기 종류 가져오기
     all_species = db.query(models.Species).all()
@@ -218,7 +227,8 @@ def get_collection(user_id: int, db: Session = Depends(database.get_db)):
                 "image_url": species.image_url,
                 "caught_count": record.caught_count,
                 "is_caught": True,
-                "habitat": species.habitat
+                "habitat": species.habitat,
+                "DstcftCn": species.description.replace("\n\n", " ") if species.description else "" # 설명 추가
             })
         else:
             # 잡은 적 없음 -> 비밀 처리
@@ -229,7 +239,8 @@ def get_collection(user_id: int, db: Session = Depends(database.get_db)):
                 "image_url": "/static/images/question_mark.png",
                 "caught_count": 0,
                 "is_caught": False,
-                "habitat": "???"
+                "habitat": "???",
+                "DstcftCn": "" # 잡기 전에는 특징도 가림 (또는 보여줌? 일단 가림)
             })
             
     return result
