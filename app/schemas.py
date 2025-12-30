@@ -80,6 +80,20 @@ class CollectionItem(BaseModel):
     
     class Config:
         from_attributes = True
+    class Config:
+        from_attributes = True
+
+class FishLetterSchema(BaseModel):
+    id: int
+    species_id: int
+    species_name: str # 편의상 추가
+    content: str
+    is_read: bool
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
 # --- Aquarium 관련 ---
 class AquariumItem(BaseModel):
     id: int
@@ -95,6 +109,7 @@ class AquariumResponse(BaseModel):
     user_id: int
     nickname: str
     fish_list: List[AquariumItem]
+    letters: List[FishLetterSchema] = [] # 편지 목록 추가
 
 # --- Habitat Pollution 관련 ---
 class HabitatPollutionSchema(BaseModel):

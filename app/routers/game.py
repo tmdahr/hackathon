@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from .. import models, schemas, database
 import random
@@ -166,7 +166,7 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
 - **방생**: 오염도가 감소하거나(일반/멸종위기), 증가합니다(쓰레기).
 - **수족관**: 특별한 효과는 없으나 도감에 기록됩니다 (현재는 판매와 유사).
 """)
-def handle_action(request: schemas.UserActionRequest, db: Session = Depends(database.get_db)):
+def handle_action(request: schemas.UserActionRequest, background_tasks: BackgroundTasks, db: Session = Depends(database.get_db)):
     """
     유저가 낚시 후 선택한 행동(판매, 방생, 수족관)을 처리하는 API
     """
@@ -230,7 +230,8 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
             db.add(new_aquarium_fish)
             message = f"{species.name}을(를) 아쿠아리움에 추가했습니다."
             if random.random() < 0.3:
-                generate_message(species, user)
+                # 비동기로 편지 생성
+                background_tasks.add_task(generate_message_task, species.id, user.id)
 
 
 
@@ -239,7 +240,7 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
         models.HabitatPollution.user_id == user.id,
         models.HabitatPollution.habitat_name == habitat_name
     ).first()
-    
+
     if habitat_pollution:
         habitat_pollution.pollution_level = max(0, min(100, habitat_pollution.pollution_level + pollution_change))
 
@@ -254,6 +255,43 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
         "current_money": user.money,
         "current_pollution": user.pollution_level
     }
+
+# [비동기 작업] 편지 생성 및 저장
+def generate_message_task(species_id: int, user_id: int):
+    # 백그라운드 작업은 별도의 세션을 만들어야 함
+    from ..database import SessionLocal
+    db = SessionLocal()
+    try:
+        user = db.query(models.User).filter(models.User.id == user_id).first()
+        species = db.query(models.Species).filter(models.Species.id == species_id).first()
+        
+        if not user or not species:
+            return
+
+        # TODO: 실제 LLM 연동 (현재는 Mock)
+        import time
+        from datetime import datetime
+        
+        # LLM 호출 시뮬레이션 (2초 딜레이)
+        time.sleep(2)
+        
+        content = f"안녕 {user.nickname}! 나는 {species.name}이야. {species.habitat}에 살고 있어. 나를 아쿠아리움에 넣어줘서 고마워!"
+        
+        new_letter = models.FishLetter(
+            user_id=user.id,
+            species_id=species.id,
+            content=content,
+            is_read=False,
+            created_at=datetime.now().isoformat()
+        )
+        db.add(new_letter)
+        db.commit()
+        print(f"[Letter Generated] To: {user.nickname}, From: {species.name}")
+        
+    except Exception as e:
+        print(f"Error generating message: {e}")
+    finally:
+        db.close()
 
 from typing import List # 리스트 출력을 위해 필요
 
