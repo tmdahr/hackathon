@@ -92,20 +92,24 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     # 2. 해당 등급 내에서 랜덤으로 하나 선택
     caught_fish = random.choice(available_species)
     
-    # 3. 도감(Collection)에 저장
-    collection = db.query(models.Collection).filter(
-        models.Collection.user_id == user.id,
-        models.Collection.species_id == caught_fish.id
-    ).first()
-    
+    # 3. 도감(Collection)에 저장 (쓰레기(type=0)는 제외)
     is_new = False
-    if not collection:
-        collection = models.Collection(user_id=user.id, species_id=caught_fish.id, caught_count=1)
-        db.add(collection)
-        is_new = True
+    if caught_fish.type != 0:
+        collection = db.query(models.Collection).filter(
+            models.Collection.user_id == user.id,
+            models.Collection.species_id == caught_fish.id
+        ).first()
+        
+        if not collection:
+            collection = models.Collection(user_id=user.id, species_id=caught_fish.id, caught_count=1)
+            db.add(collection)
+            is_new = True
+        else:
+            collection.caught_count += 1
+            collection.is_new = False # 이미 잡은 적 있으니 False
     else:
-        collection.caught_count += 1
-        collection.is_new = False # 이미 잡은 적 있으니 False
+        # 쓰레기는 도감에 기록하지 않음
+        pass
     
     # 4. 보상 지급 (돈, 오염도 변화) 및 저장
     user.money += caught_fish.price
@@ -202,8 +206,8 @@ from typing import List # 리스트 출력을 위해 필요
 
 @router.get("/collection/{user_id}", response_model=List[schemas.CollectionItem], summary="유저 도감 조회", description="유저가 잡은 물고기 도감을 조회합니다. 잡지 못한 물고기는 ???로 표시됩니다.")
 def get_collection(user_id: int, db: Session = Depends(database.get_db)):
-    # 1. 게임의 모든 물고기 종류 가져오기
-    all_species = db.query(models.Species).all()
+    # 1. 게임의 모든 물고기 종류 가져오기 (쓰레기(type=0) 제외)
+    all_species = db.query(models.Species).filter(models.Species.type != 0).all()
     
     # 2. 해당 유저가 잡은 기록 가져오기
     user_collections = db.query(models.Collection).filter(models.Collection.user_id == user_id).all()
