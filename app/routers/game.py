@@ -56,6 +56,13 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # [수정] 서식지 입력값 정제 (공백 제거)
+    if habitat:
+        habitat = habitat.strip()
+    
+    if not habitat:
+        raise HTTPException(status_code=400, detail="서식지 정보(habitat)가 필요합니다.")
+
     # 1. 서식지별 오염도 가져오기
     habitat_pollution = db.query(models.HabitatPollution).filter(
         models.HabitatPollution.user_id == user.id,
@@ -63,7 +70,7 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     ).first()
     
     if not habitat_pollution:
-        # 혹시 모르니 초기화 (마이그레이션 누락 대비)
+        # 서식지 정보가 DB에 없는 경우 초기화
         habitat_pollution = models.HabitatPollution(
             user_id=user.id,
             habitat_name=habitat,
@@ -75,34 +82,32 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     # 등급 결정 (서식지별 오염도 사용)
     target_type = select_species_type_by_pollution(habitat_pollution.pollution_level, user.rod_level)
     
-    # [수정된 부분] habitat 필터 추가
-    # 단, 쓰레기(type=0)는 서식지 상관없이 낚여야 함 & 낚싯대 레벨에 따른 정화가 필요할 수도 있음(기획 필요, 일단 유지)
-    
-    query = db.query(models.Species)
+    # [수정] habitat 필터 강화
+    # 쓰레기(type=0)는 서식지 명칭이 '쓰레기'인 것 중에서만 낚이도록 함 (서식지 무관 기획 변경 시 대응)
+    # 일반 물고기(type=1,2)는 요청받은 habitat과 일치하는 것만 필터링
     
     if target_type == 0:
-        # 쓰레기는 서식지 무관하게 모든 쓰레기 중 랜덤
-        query = query.filter(models.Species.type == 0)
+        # 쓰레기는 '쓰레기' 서식지로 고정된 종들 중 랜덤
+        available_species = db.query(models.Species).filter(models.Species.type == 0).all()
     else:
-        # 그 외 물고기는 서식지와 등급 일치 필요
-        query = query.filter(
+        # 그 외 물고기는 서식지와 등급이 정확히 일치해야 함
+        available_species = db.query(models.Species).filter(
             models.Species.type == target_type,
             models.Species.habitat == habitat
-        )
+        ).all()
         
-    available_species = query.all()
-    
-    # [수정된 부분] 꽝 방지 로직 (Fallback)
-    # 만약 해당 등급 물고기가 없는데, 타겟이 '일반(1)'이 아니라면 일반 물고기로 재시도
+    # [수정] 꽝 방지 로직 (Fallback) - 서식지(habitat)를 벗어나지 않도록 엄격히 제한
     if not available_species and target_type != 1 and target_type != 0:
-        print(f"Fallback: No species found for type {target_type} in {habitat}. Trying Normal(1)...")
+        print(f"[Fishing] No species found for Type:{target_type} in Habitat:'{habitat}'. Falling back to Normal(1)...")
         available_species = db.query(models.Species).filter(
             models.Species.type == 1,
             models.Species.habitat == habitat
         ).all()
 
     if not available_species:
-        return {"message": "아무것도 잡히지 않았습니다... (해당 서식지에 물고기가 없음)"}
+        # 해당 서식지에 아예 물고기가 한 마리도 정의되어 있지 않은 경우
+        print(f"[Fishing WARNING] No species defined at all for Habitat:'{habitat}' (Type:1 or {target_type})")
+        return {"message": f"아무것도 잡히지 않았습니다... ('{habitat}' 서식지에 생물이 발견되지 않음)"}
     
     # 2. 해당 등급 내에서 랜덤으로 하나 선택
     caught_fish = random.choice(available_species)
@@ -218,7 +223,7 @@ def handle_action(request: schemas.UserActionRequest, background_tasks: Backgrou
             final_price = species.price
             if is_sick:
                 final_price = int(species.price * 0.5) # 병든 물고기는 반값
-                message = f"병든 {species.name}을(를) 팔아 {final_price}원을 벌었습니다. (병든 물고기 페널티 -50%)"
+                message = f"병든 {species.name}을(를) 팔아 {final_price}원을 벌었습니다. (병든 물고기 페널티 -50%원)"
             else:
                 message = f"{species.name}을(를) 팔아 {species.price}원을 벌었습니다. "
             money_change = final_price
