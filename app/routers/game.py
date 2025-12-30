@@ -439,7 +439,7 @@ def invalidate_last_fish(user_id: int, db: Session = Depends(database.get_db)):
     db.commit()
     
     return {
-        "message": f"{species.name}의 낚시 결과를 무효화했습니다." if species else "낚시 결과를 무효화했습니다.",
-        "species_name": species.name if species else None,
+        "message": f"{species_obj.name}의 낚시 결과를 무효화했습니다." if species_obj else "낚시 결과를 무효화했습니다.",
+        "species_name": species_obj.name if species_obj else None,
         "species_id": latest_record.species_id
     }
