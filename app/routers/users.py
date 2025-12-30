@@ -36,6 +36,10 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)
         )
         db.add(new_hp)
     
+    # 기본 낚싯대(ID 0) 기본 지급
+    initial_inventory = models.Inventory(user_id=new_user.id, item_id=0)
+    db.add(initial_inventory)
+    
     db.commit()
     db.refresh(new_user)
     return new_user

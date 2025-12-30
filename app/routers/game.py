@@ -179,7 +179,6 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
     message = ""
     money_change = 0
     pollution_change = 0
-    habitat_name = request.habitat
 
     # 어떤 서식지에서 잡혔는지 히스토리에서 확인
     history = db.query(models.FishingHistory).filter(
@@ -187,7 +186,10 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
         models.FishingHistory.species_id == species.id,
         models.FishingHistory.invalidated == False
     ).order_by(models.FishingHistory.id.desc()).first()
-    
+
+    # habitat_name 결정: 요청에 있으면 쓰고, 없으면 히스토리에서 가져옴
+    habitat_name = request.habitat if request.habitat else (history.habitat if history else "알 수 없음")
+
     # 행동에 따른 로직 분기
     if request.action == schemas.ActionType.SELL:
         # 1. 판매 (SELL)
@@ -195,7 +197,7 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
             pollution_change = -5 # 청소 효과
             message = f"쓰레기를 치워서 {habitat_name}이(가) 깨끗해졌습니다."
         elif species.type == 2:
-            money_change = -500 # 벌금
+            money_change = -1000 # 벌금
             message = "멸종위기종을 팔려다 적발되어 벌금을 물었습니다!"
         else:
             money_change = species.price
@@ -208,7 +210,7 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
             message = f"쓰레기를 다시 버려서 {habitat_name}이(가) 더러워졌습니다..."
         elif species.type == 2:
             pollution_change = -10 # 생태계 회복
-            money_change = 1000 # 정부 보조금
+            money_change = 1500 # 정부 보조금
             message = "멸종위기종을 보호해주어 정부 지원금을 받았습니다!"
         else:
             pollution_change = -2 # 일반 물고기 방생은 환경에 약간 좋음

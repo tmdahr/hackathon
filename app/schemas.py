@@ -40,7 +40,7 @@ class UserActionRequest(BaseModel):
     user_id: int
     species_id: int
     action: ActionType
-    habitat: str # 추가: 어떤 서식지에서 행동을 취하는지
+    habitat: Optional[str] = None # 선택 사항으로 변경
 
 # --- User 관련 ---
 class UserCreate(BaseModel):
