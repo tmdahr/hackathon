@@ -209,40 +209,40 @@ def handle_action(request: schemas.UserActionRequest, background_tasks: Backgrou
         # 1. 판매 (SELL)
         if species.type == 0:
             pollution_change = -2 # 청소 효과
-            message = f"쓰레기를 치워서 {habitat_name}이(가) 깨끗해졌습니다."
+            message = f"쓰레기를 치워서 {habitat_name}이(가) 깨끗해졌습니다. (오염도 -2)"
         elif species.type == 2:
             money_change = -1000 # 벌금
-            message = "멸종위기종을 팔려다 적발되어 벌금을 물었습니다!"
+            message = "멸종위기종을 팔려다 적발되어 벌금을 물었습니다! (-1000원)"
         else:
             final_price = species.price
             if is_sick:
                 final_price = int(species.price * 0.5) # 병든 물고기는 반값
                 message = f"병든 {species.name}을(를) 팔아 {final_price}원을 벌었습니다. (병든 물고기 페널티 -50%)"
             else:
-                message = f"{species.name}을(를) 팔아 {species.price}원을 벌었습니다."
+                message = f"{species.name}을(를) 팔아 {species.price}원을 벌었습니다. "
             money_change = final_price
             
     elif request.action == schemas.ActionType.RELEASE:
         # 2. 방생 (RELEASE)
         if species.type == 0:
             pollution_change = 10 # 쓰레기 투기
-            message = f"쓰레기를 다시 버려서 {habitat_name}이(가) 더러워졌습니다..."
+            message = f"쓰레기를 다시 버려서 {habitat_name}이(가) 더러워졌습니다. (오염도 +10)"
         elif species.type == 2:
             pollution_change = -5 # 생태계 회복
             money_change = 1000 # 정부 보조금
-            message = "멸종위기종을 보호해주어 정부 지원금을 받았습니다!"
+            message = "멸종위기종을 보호해주어 정부 지원금을 받았습니다! (+1000원)"
         else:
             pollution_change = -2 # 일반 물고기 방생은 환경에 약간 좋음
-            message = f"{species.name}을(를) 방생했습니다."
+            message = f"{species.name}을(를) 방생했습니다. (오염도 -2)"
 
     elif request.action == schemas.ActionType.AQUARIUM:
         # 3. 수족관 (AQUARIUM)
         if species.type == 0:
             money_change = -500 # 벌금
-            message = "쓰레기를 아쿠아리움에 추가해 벌금을 납부했습니다."
+            message = "쓰레기를 아쿠아리움에 추가해 벌금을 납부했습니다. (-500원)"
         elif is_sick:
             # 병든 물고기는 수송 중 사망
-            message = f"{species.name}이(가) 수송 중 사망했습니다... (오염된 물 때문에 병든 상태였습니다)"
+            message = f"병든 {species.name}이(가) 수송 중 사망했습니다."
             # 아무런 추가 작업 없음 (Aquarium에 저장되지 않음)
         else:
             # 아쿠아리움에 추가
