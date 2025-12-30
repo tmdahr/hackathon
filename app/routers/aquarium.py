@@ -15,8 +15,7 @@ def generate_message(species: Species, user: User) -> str:
             "fish_name": species.name,
             "user_name": user.nickname,
             "feature": species.description,
-            "protection": "일반해양생물", 
-            "type": "무척추동물", 
+            "protection": species.type, 
             "pollution_level": str(user.pollution_level)
         },
         "response_mode": "blocking",
