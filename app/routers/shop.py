@@ -74,9 +74,13 @@ async def buy_item(request: Request, db: Session = Depends(database.get_db)):
         try:
             body = await request.json()
             if user_id is None:
-                user_id = body.get("user_id") or body.get("userId")
+                user_id = body.get("user_id")
+                if user_id is None:
+                    user_id = body.get("userId")
             if item_id is None:
-                item_id = body.get("item_id") or body.get("itemId")
+                item_id = body.get("item_id")
+                if item_id is None:
+                    item_id = body.get("itemId")
         except:
             pass
 
@@ -115,12 +119,12 @@ async def buy_item(request: Request, db: Session = Depends(database.get_db)):
         models.Inventory.item_id == item_id
     ).first()
 
-    if owned_item:
+    if owned_item or item_id == 0:
         user.rod_level = item["level"]
         db.commit()
         db.refresh(user)
         return {
-            "message": f"{item['name']}을(를) 장착했습니다! (이미 보유중)",
+            "message": f"{item['name']}을(를) 장착했습니다! (보유 중)",
             "money": user.money,
             "rod_level": user.rod_level
         }
