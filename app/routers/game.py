@@ -176,7 +176,7 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
             message = "멸종위기종을 보호해주어 정부 지원금을 받았습니다!"
         else:
             pollution_change = -2 # 일반 물고기 방생은 환경에 약간 좋음
-            message = f"물고기를 {species.name}을(를) 방생했습니다."
+            message = f"{species.name}을(를) 방생했습니다."
 
     elif request.action == schemas.ActionType.AQUARIUM:
         # 3. 수족관 (AQUARIUM) -> 여기선 특별한 변화 없음 (도감엔 이미 등록됨)
