@@ -4,7 +4,6 @@ from enum import Enum
 
 class SpeciesType(str, Enum):
     TRASH = "TRASH"
-    INVASIVE = "INVASIVE"
     NORMAL = "NORMAL"
     ENDANGERED = "ENDANGERED"
 
@@ -15,6 +14,7 @@ class FishDetail(BaseModel):
     type: int
     price: int
     image_url: str
+    habitat: str
 
 class UserStatus(BaseModel):
     money: int

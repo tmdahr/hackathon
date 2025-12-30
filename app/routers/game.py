@@ -14,37 +14,42 @@ def select_species_type_by_pollution(pollution: int, rod_level: int):
         rod_level = 1
 
     # 1. 기본 확률 설정 (오염도에 따라 다름)
-    # 순서: [0:쓰레기, 1:교란종, 2:일반, 3:멸종위기]
+    # 1. 기본 확률 설정 (오염도에 따라 다름)
+    # 순서: [0:쓰레기, 2:일반, 3:멸종위기] (교란종 삭제됨)
+    # 기존 교란종(1) 확률을 일반(2)에 합산 (또는 적절히 배분)
     if pollution >= 80:
-        weights = [60, 30, 10, 0]  # 매우 더러움
+        # 기존: [60, 30, 10, 0] -> 교란종 30%를 일반에 합치면 [60, 40, 0]
+        # 너무 깨끗해지면 쓰레기를 줄이고 일반을 늘림
+        weights = [60, 40, 0] 
     elif pollution >= 50:
-        weights = [40, 30, 25, 5]  # 보통
+        # 기존: [40, 30, 25, 5] -> [40, 55, 5]
+        weights = [40, 55, 5]
     elif pollution >= 20:
-        weights = [20, 20, 45, 15] # 깨끗함
+        # 기존: [20, 20, 45, 15] -> [20, 65, 15]
+        weights = [20, 65, 15]
     else:
-        weights = [5, 10, 55, 30]  # 매우 깨끗함
+        # 기존: [5, 10, 55, 30] -> [5, 65, 30]
+        weights = [5, 65, 30]
 
-    # 2. 낚싯대 레벨에 따른 확률 보정 (보내주신 수치 적용)
-    # weights 리스트 값을 직접 수정합니다.
+    # 2. 낚싯대 레벨에 따른 확률 보정
     if rod_level == 2:  # 카본 낚싯대
         weights[0] = max(0, weights[0] - 3) # 쓰레기 -3%
-        weights[1] = max(0, weights[1] - 3) # 교란종 -3%
-        weights[2] += 5                     # 일반 +5%
-        weights[3] += 1                     # 멸종위기 +1%
+        weights[1] += 5                     # 일반 +5% (Index 1 is now Normal)
+        weights[2] += 1                     # 멸종위기 +1% (Index 2 is now Endangered)
+        # 교란종 삭제로 인한 남는 확률 보정은 생략하거나 일반에 더해진 것으로 간주
         
     elif rod_level >= 3: # 티타늄 낚싯대 (3레벨 이상)
         weights[0] = max(0, weights[0] - 5) # 쓰레기 -5%
-        weights[1] = max(0, weights[1] - 5) # 교란종 -5%
-        weights[2] += 7                     # 일반 +7%
-        weights[3] += 3                     # 멸종위기 +3%
+        weights[1] += 7                     # 일반 +7%
+        weights[2] += 3                     # 멸종위기 +3%
 
     # 3. 확률 기반 뽑기
-    # types: 0=쓰레기, 1=교란종, 2=일반, 3=멸종위기
-    return random.choices([0, 1, 2, 3], weights=weights, k=1)[0]
+    # types: 0=쓰레기, 2=일반, 3=멸종위기
+    return random.choices([0, 2, 3], weights=weights, k=1)[0]
 
 
 @router.post("/fish", response_model=schemas.FishResponse)
-def fishing(user_id: int, db: Session = Depends(database.get_db)):
+def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -53,10 +58,25 @@ def fishing(user_id: int, db: Session = Depends(database.get_db)):
     target_type = select_species_type_by_pollution(user.pollution_level, user.rod_level)
     
     # [수정된 부분] target_type.value -> target_type 으로 변경!
-    available_species = db.query(models.Species).filter(models.Species.type == target_type).all()
+    # habitat 필터 추가
+    # 단, 쓰레기(type=0)는 서식지 상관없이 낚여야 함 & 낚싯대 레벨에 따른 정화가 필요할 수도 있음(기획 필요, 일단 유지)
+    
+    query = db.query(models.Species)
+    
+    if target_type == 0:
+        # 쓰레기는 서식지 무관하게 모든 쓰레기 중 랜덤
+        query = query.filter(models.Species.type == 0)
+    else:
+        # 그 외 물고기는 서식지와 등급 일치 필요
+        query = query.filter(
+            models.Species.type == target_type,
+            models.Species.habitat == habitat
+        )
+        
+    available_species = query.all()
     
     if not available_species:
-        return {"message": "아무것도 잡히지 않았습니다... (해당 등급의 물고기 데이터가 DB에 없음)"}
+        return {"message": "아무것도 잡히지 않았습니다... (해당 서식지/등급의 물고기가 없음)"}
     
     # 2. 해당 등급 내에서 랜덤으로 하나 선택
     caught_fish = random.choice(available_species)
@@ -91,7 +111,8 @@ def fishing(user_id: int, db: Session = Depends(database.get_db)):
             "name": caught_fish.name,
             "type": caught_fish.type, # 0:쓰레기, 1:교란종, 2:일반, 3:멸종위기
             "price": caught_fish.price,
-            "image_url": caught_fish.image_url
+            "image_url": caught_fish.image_url,
+            "habitat": caught_fish.habitat
         },
         "is_new": is_new,
         "user_status": {
@@ -124,9 +145,6 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
         elif species.type == "ENDANGERED":
             money_change = -500 # 벌금
             message = "멸종위기종을 팔려다 적발되어 벌금을 물었습니다!"
-        elif species.type == "INVASIVE":
-            money_change = 500 # 포상금
-            message = "생태계 교란종을 처리해 포상금을 받았습니다."
         else:
             money_change = species.base_price
             message = f"{species.name}을(를) 팔아 {species.base_price}원을 벌었습니다."
@@ -136,9 +154,6 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
         if species.type == "TRASH":
             pollution_change = 10 # 쓰레기 투기
             message = "쓰레기를 다시 버려서 바다가 더러워졌습니다..."
-        elif species.type == "INVASIVE":
-            pollution_change = 7 # 생태계 교란
-            message = "교란종을 풀어주어 생태계가 위험해졌습니다."
         elif species.type == "ENDANGERED":
             pollution_change = -10 # 생태계 회복
             money_change = 1000 # 정부 보조금
@@ -215,7 +230,6 @@ def get_collection(user_id: int, db: Session = Depends(database.get_db)):
 # [도우미 함수] 숫자 타입(0,1,2,3)을 글자로 바꿔주는 함수
 def get_type_name(type_code: int):
     if type_code == 0: return "쓰레기"
-    if type_code == 1: return "생태계 교란종"
     if type_code == 2: return "일반 물고기"
     if type_code == 3: return "멸종위기종"
     return "기타"
