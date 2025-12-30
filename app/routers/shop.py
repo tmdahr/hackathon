@@ -40,7 +40,6 @@ def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    # [핵심 로직 변경]
     # 1. 이미 인벤토리에 있는지 확인
     owned_item = db.query(models.Inventory).filter(
         models.Inventory.user_id == user.id,
@@ -51,6 +50,7 @@ def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)
         # 이미 샀던 거라면 -> 돈 안 들고 장착만!
         user.rod_level = item["level"]
         db.commit()
+        db.refresh(user)
         return {
             "message": f"{item['name']}을(를) 장착했습니다! (이미 보유중)",
             "current_money": user.money,
@@ -70,6 +70,7 @@ def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)
     db.add(new_inventory)
     
     db.commit()
+    db.refresh(user)
     
     return {
         "message": f"{item['name']} 구매 성공! 낚싯대가 장착되었습니다.",
