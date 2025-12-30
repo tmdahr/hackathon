@@ -10,42 +10,37 @@ router = APIRouter(
 
 # 오염도에 따른 확률 가중치 계산 함수
 def select_species_type_by_pollution(pollution: int, rod_level: int):
-    # 기본 타입 순서: [0:쓰레기, 1:교란종, 2:일반, 3:멸종위기]
-    types = [schemas.SpeciesType.TRASH, schemas.SpeciesType.INVASIVE, schemas.SpeciesType.NORMAL, schemas.SpeciesType.ENDANGERED]
-    
-    # 1. 오염도에 따른 기본 확률 설정 (Base Weights)
-    if pollution >= 85:   # 5단계
-        weights = [70, 20, 10, 0]
-    elif pollution >= 60: # 4단계
-        weights = [50, 30, 20, 0]
-    elif pollution >= 30: # 3단계
-        weights = [30, 30, 30, 10]
-    elif pollution >= 10: # 2단계
-        weights = [10, 25, 45, 20]
-    else:                 # 1단계
-        weights = [0, 10, 55, 35]
+    if rod_level is None:
+        rod_level = 1
 
-    # 2. 낚싯대 등급에 따른 확률 보정 (Modifiers)
-    # weights[0]:쓰레기, [1]:교란종, [2]:일반, [3]:멸종위기
-    
-    if rod_level == 2:
-        # 쓰레기-3, 교란종-3, 일반+5, 멸종+1
-        weights[0] -= 3
-        weights[1] -= 3
-        weights[2] += 5
-        weights[3] += 1
+    # 1. 기본 확률 설정 (오염도에 따라 다름)
+    # 순서: [0:쓰레기, 1:교란종, 2:일반, 3:멸종위기]
+    if pollution >= 80:
+        weights = [60, 30, 10, 0]  # 매우 더러움
+    elif pollution >= 50:
+        weights = [40, 30, 25, 5]  # 보통
+    elif pollution >= 20:
+        weights = [20, 20, 45, 15] # 깨끗함
+    else:
+        weights = [5, 10, 55, 30]  # 매우 깨끗함
+
+    # 2. 낚싯대 레벨에 따른 확률 보정 (보내주신 수치 적용)
+    # weights 리스트 값을 직접 수정합니다.
+    if rod_level == 2:  # 카본 낚싯대
+        weights[0] = max(0, weights[0] - 3) # 쓰레기 -3%
+        weights[1] = max(0, weights[1] - 3) # 교란종 -3%
+        weights[2] += 5                     # 일반 +5%
+        weights[3] += 1                     # 멸종위기 +1%
         
-    elif rod_level >= 3:
-        # 쓰레기-5, 교란종-5, 일반+7, 멸종+3
-        weights[0] -= 5
-        weights[1] -= 5
-        weights[2] += 7
-        weights[3] += 3
+    elif rod_level >= 3: # 티타늄 낚싯대 (3레벨 이상)
+        weights[0] = max(0, weights[0] - 5) # 쓰레기 -5%
+        weights[1] = max(0, weights[1] - 5) # 교란종 -5%
+        weights[2] += 7                     # 일반 +7%
+        weights[3] += 3                     # 멸종위기 +3%
 
-    # 3. 확률이 음수가 되지 않도록 보정 (0 미만이면 0으로)
-    weights = [max(0, w) for w in weights]
-
-    return random.choices(types, weights=weights, k=1)[0]
+    # 3. 확률 기반 뽑기
+    # types: 0=쓰레기, 1=교란종, 2=일반, 3=멸종위기
+    return random.choices([0, 1, 2, 3], weights=weights, k=1)[0]
 
 
 @router.post("/fish", response_model=schemas.FishResponse)
@@ -112,12 +107,14 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
     if request.action == schemas.ActionType.SELL:
         # 1. 판매 (SELL)
         if species.type == "TRASH":
-            money_change = -50  # 쓰레기 처리 비용
             pollution_change = -5 # 청소 효과
-            message = "쓰레기를 치워서 바다가 깨끗해졌지만, 처리 비용이 들었습니다."
+            message = "쓰레기를 치워서 바다가 깨끗해졌습니다."
         elif species.type == "ENDANGERED":
-            money_change = -5000 # 벌금
+            money_change = -500 # 벌금
             message = "멸종위기종을 팔려다 적발되어 벌금을 물었습니다!"
+        elif species.type == "INVASIVE":
+            money_change = 500 # 포상금
+            message = "생태계 교란종을 처리해 포상금을 받았습니다."
         else:
             money_change = species.base_price
             message = f"{species.name}을(를) 팔아 {species.base_price}원을 벌었습니다."
@@ -125,10 +122,10 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
     elif request.action == schemas.ActionType.RELEASE:
         # 2. 방생 (RELEASE)
         if species.type == "TRASH":
-            pollution_change = 5 # 쓰레기 투기
+            pollution_change = 10 # 쓰레기 투기
             message = "쓰레기를 다시 버려서 바다가 더러워졌습니다..."
         elif species.type == "INVASIVE":
-            pollution_change = 10 # 생태계 교란
+            pollution_change = 7 # 생태계 교란
             message = "교란종을 풀어주어 생태계가 위험해졌습니다."
         elif species.type == "ENDANGERED":
             pollution_change = -10 # 생태계 회복
@@ -140,7 +137,11 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
 
     elif request.action == schemas.ActionType.AQUARIUM:
         # 3. 수족관 (AQUARIUM) -> 여기선 특별한 변화 없음 (도감엔 이미 등록됨)
-        message = f"{species.name}을(를) 수족관에서 기르기로 했습니다."
+        if species.type == "TRASH":
+            money_change = -500 # 벌금
+            message = "쓰레기를 아쿠아리움에 버려서 벌금을 물었습니다!"
+        else: 
+            message = f"{species.name}을(를) 수족관에서 기르기로 했습니다."
 
     # DB 업데이트
     user.money += money_change
