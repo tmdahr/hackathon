@@ -308,12 +308,16 @@ def generate_message_task(species_id: int, user_id: int):
             "Content-Type": "application/json"
         }
         
+        # protection type to string conversion
+        protection_str = "일반해양생물"
+        if species.type == 2: protection_str = "해양보호생물"
+
         payload = {
             "inputs": {
                 "fish_name": species.name,
                 "user_name": user.nickname,
                 "feature": species.description or "특징 없음",
-                "protection": species.type, 
+                "protection": protection_str, 
                 "pollution_level": str(user.pollution_level)
             },
             "response_mode": "blocking",

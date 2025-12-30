@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from typing import List
 from .. import models, schemas, database
 
 router = APIRouter(
@@ -29,6 +30,44 @@ def get_items():
             "rod_level": data["level"]
         })
     return items
+
+@router.get("/inventory/{user_id}", summary="인벤토리 조회", description="유저가 보유한 낚싯대 목록을 조회합니다. 현재 장착 중인 낚싯대는 is_equipped=True로 표시됩니다.")
+def get_inventory(user_id: int, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 유저의 인벤토리 조회
+    user_inventory = db.query(models.Inventory).filter(models.Inventory.user_id == user_id).all()
+    
+    # 보유한 아이템 ID 집합
+    owned_ids = {item.item_id for item in user_inventory}
+    
+    # 기본 낚싯대(0번)는 항상 보유한 것으로 처리 (시스템 기본 지급 정책)
+    owned_ids.add(0)
+    
+    result = []
+    current_rod_level = user.rod_level
+    
+    for item_id in owned_ids:
+        # SHOP_ITEMS에 정의된 아이템인 경우만 처리
+        if item_id in SHOP_ITEMS:
+            data = SHOP_ITEMS[item_id]
+            is_equipped = (data["level"] == current_rod_level)
+            
+            result.append({
+                "item_id": item_id,
+                "name": data["name"],
+                "description": data["desc"],
+                "price": data["price"],
+                "rod_level": data["level"],
+                "is_equipped": is_equipped
+            })
+    
+    # 레벨 순 정렬
+    result.sort(key=lambda x: x["rod_level"])
+    
+    return result
 
 @router.post("/buy", summary="아이템 구매", description="돈을 사용하여 상점에서 낚싯대를 구매하고 장착합니다. 이미 보유한 아이템은 장착만 수행됩니다.")
 def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)):
