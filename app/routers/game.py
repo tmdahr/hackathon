@@ -15,28 +15,26 @@ def select_species_type_by_pollution(pollution: int, rod_level: int):
 
     # 1. 기본 확률 설정 (오염도에 따라 다름)
     # 1. 기본 확률 설정 (오염도에 따라 다름)
-    # 순서: [0:쓰레기, 2:일반, 3:멸종위기] (교란종 삭제됨)
-    # 기존 교란종(1) 확률을 일반(2)에 합산 (또는 적절히 배분)
+    # 순서: [0:쓰레기, 1:일반, 2:멸종위기] (번호 변경됨)
     if pollution >= 80:
-        # 기존: [60, 30, 10, 0] -> 교란종 30%를 일반에 합치면 [60, 40, 0]
-        # 너무 깨끗해지면 쓰레기를 줄이고 일반을 늘림
+        # 매우 더러움
         weights = [60, 40, 0] 
     elif pollution >= 50:
-        # 기존: [40, 30, 25, 5] -> [40, 55, 5]
+        # 보통
         weights = [40, 55, 5]
     elif pollution >= 20:
-        # 기존: [20, 20, 45, 15] -> [20, 65, 15]
+        # 깨끗함
         weights = [20, 65, 15]
     else:
-        # 기존: [5, 10, 55, 30] -> [5, 65, 30]
+        # 매우 깨끗함
         weights = [5, 65, 30]
 
     # 2. 낚싯대 레벨에 따른 확률 보정
     if rod_level == 2:  # 카본 낚싯대
         weights[0] = max(0, weights[0] - 3) # 쓰레기 -3%
-        weights[1] += 5                     # 일반 +5% (Index 1 is now Normal)
-        weights[2] += 1                     # 멸종위기 +1% (Index 2 is now Endangered)
-        # 교란종 삭제로 인한 남는 확률 보정은 생략하거나 일반에 더해진 것으로 간주
+        weights[1] += 5                     # 일반 +5% (Index 1 is Normal)
+        weights[2] += 1                     # 멸종위기 +1% (Index 2 is Endangered)
+        # 잔여 확률 보정 생략
         
     elif rod_level >= 3: # 티타늄 낚싯대 (3레벨 이상)
         weights[0] = max(0, weights[0] - 5) # 쓰레기 -5%
@@ -44,8 +42,8 @@ def select_species_type_by_pollution(pollution: int, rod_level: int):
         weights[2] += 3                     # 멸종위기 +3%
 
     # 3. 확률 기반 뽑기
-    # types: 0=쓰레기, 2=일반, 3=멸종위기
-    return random.choices([0, 2, 3], weights=weights, k=1)[0]
+    # types: 0=쓰레기, 1=일반, 2=멸종위기
+    return random.choices([0, 1, 2], weights=weights, k=1)[0]
 
 
 @router.post("/fish", response_model=schemas.FishResponse)
@@ -54,7 +52,7 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # 1. 어떤 등급의 물고기가 잡힐지 결정 (이제 여기서 숫자 0,1,2,3이 나옵니다)
+    # 1. 어떤 등급의 물고기가 잡힐지 결정 (이제 여기서 숫자 0,1,2가 나옵니다)
     target_type = select_species_type_by_pollution(user.pollution_level, user.rod_level)
     
     # [수정된 부분] target_type.value -> target_type 으로 변경!
@@ -75,8 +73,17 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
         
     available_species = query.all()
     
+    # [수정된 부분] 꽝 방지 로직 (Fallback)
+    # 만약 해당 등급 물고기가 없는데, 타겟이 '일반(1)'이 아니라면 일반 물고기로 재시도
+    if not available_species and target_type != 1 and target_type != 0:
+        print(f"Fallback: No species found for type {target_type} in {habitat}. Trying Normal(1)...")
+        available_species = db.query(models.Species).filter(
+            models.Species.type == 1,
+            models.Species.habitat == habitat
+        ).all()
+
     if not available_species:
-        return {"message": "아무것도 잡히지 않았습니다... (해당 서식지/등급의 물고기가 없음)"}
+        return {"message": "아무것도 잡히지 않았습니다... (해당 서식지에 물고기가 없음)"}
     
     # 2. 해당 등급 내에서 랜덤으로 하나 선택
     caught_fish = random.choice(available_species)
@@ -230,6 +237,6 @@ def get_collection(user_id: int, db: Session = Depends(database.get_db)):
 # [도우미 함수] 숫자 타입(0,1,2,3)을 글자로 바꿔주는 함수
 def get_type_name(type_code: int):
     if type_code == 0: return "쓰레기"
-    if type_code == 2: return "일반 물고기"
-    if type_code == 3: return "멸종위기종"
+    if type_code == 1: return "일반 물고기"
+    if type_code == 2: return "멸종위기종"
     return "기타"
