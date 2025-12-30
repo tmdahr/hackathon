@@ -61,19 +61,19 @@ def get_inventory(user_id: int, db: Session = Depends(database.get_db)):
     return result
 
 @router.post("/buy", summary="아이템 구매", description="돈을 사용하여 상점에서 낚싯대를 구매하고 장착합니다. 이미 보유한 아이템은 장착만 수행됩니다.")
-def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)):
-    user = db.query(models.User).filter(models.User.id == request.user_id).first()
+def buy_item(user_id: int, item_id: int, db: Session = Depends(database.get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    item = SHOP_ITEMS.get(request.item_id)
+    item = SHOP_ITEMS.get(item_id)
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
     # 1. 이미 인벤토리에 있는지 확인
     owned_item = db.query(models.Inventory).filter(
         models.Inventory.user_id == user.id,
-        models.Inventory.item_id == request.item_id
+        models.Inventory.item_id == item_id
     ).first()
 
     if owned_item:
@@ -93,7 +93,7 @@ def buy_item(request: schemas.BuyRequest, db: Session = Depends(database.get_db)
     user.money -= item["price"]
     user.rod_level = item["level"]
     
-    new_inventory = models.Inventory(user_id=user.id, item_id=request.item_id)
+    new_inventory = models.Inventory(user_id=user.id, item_id=item_id)
     db.add(new_inventory)
     
     db.commit()
