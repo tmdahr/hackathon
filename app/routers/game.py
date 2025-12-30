@@ -176,7 +176,7 @@ def handle_action(request: schemas.UserActionRequest, db: Session = Depends(data
             message = "멸종위기종을 보호해주어 정부 지원금을 받았습니다!"
         else:
             pollution_change = -2 # 일반 물고기 방생은 환경에 약간 좋음
-            message = "물고기를 놓아주었습니다."
+            message = f"물고기를 {species.name}을(를) 방생했습니다."
 
     elif request.action == schemas.ActionType.AQUARIUM:
         # 3. 수족관 (AQUARIUM) -> 여기선 특별한 변화 없음 (도감엔 이미 등록됨)
@@ -239,15 +239,15 @@ def get_collection(user_id: int, db: Session = Depends(database.get_db)):
                 "image_url": "/static/images/question_mark.png",
                 "caught_count": 0,
                 "is_caught": False,
-                "habitat": "???",
+                "habitat": species.habitat,
                 "DstcftCn": "" # 잡기 전에는 특징도 가림 (또는 보여줌? 일단 가림)
             })
             
     return result
 
-# [도우미 함수] 숫자 타입(0,1,2,3)을 글자로 바꿔주는 함수
+# [도우미 함수] 숫자 타입(0,1,2)을 글자로 바꿔주는 함수
 def get_type_name(type_code: int):
     if type_code == 0: return "쓰레기"
-    if type_code == 1: return "일반 물고기"
+    if type_code == 1: return "일반 해양 생물"
     if type_code == 2: return "멸종위기종"
     return "기타"
