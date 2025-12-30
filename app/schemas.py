@@ -16,6 +16,7 @@ class FishDetail(BaseModel):
     price: int
     image_url: str
     habitat: str
+    is_sick: bool = False # 추가: 병든 물고기 여부
 
 class UserStatus(BaseModel):
     money: int
@@ -40,7 +41,8 @@ class UserActionRequest(BaseModel):
     user_id: int
     species_id: int
     action: ActionType
-    habitat: Optional[str] = None # 선택 사항으로 변경
+    habitat: Optional[str] = None # 선택 사항
+    is_sick: bool = False # 추가: 클라이언트가 전달하는 병든 여부
 
 # --- User 관련 ---
 class UserCreate(BaseModel):
@@ -52,6 +54,8 @@ class UserResponse(BaseModel):
     money: int
     rod_level: int
     habitat_pollutions: List['HabitatPollutionSchema'] = []
+    aquarium_list: List['AquariumItem'] = [] # 아쿠아리움 목록 추가
+    letter_list: List['FishLetterSchema'] = [] # 편지 목록 추가
     
     class Config:
         from_attributes = True
@@ -78,8 +82,6 @@ class CollectionItem(BaseModel):
     habitat: str # [새로 추가] 서식지 정보
     DstcftCn: str = "" # [새로 추가] 특징 (설명)
     
-    class Config:
-        from_attributes = True
     class Config:
         from_attributes = True
 

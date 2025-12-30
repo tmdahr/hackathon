@@ -20,13 +20,10 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(database.get_db)
     db.commit()
     db.refresh(new_user)
 
-    # 모든 서식지에 대해 초기 오염도 설정
-    from .game import select_species_type_by_pollution # 혹시 필요하면 (근데 여기선 그냥 이름만 필요)
     # 실제 서식지 목록 가져오기
     habitats = db.query(models.Species.habitat).distinct().all()
-    habitat_names = [h[0] for h in habitats if h[0]]
-    if "쓰레기" not in habitat_names:
-        habitat_names.append("쓰레기")
+    # '쓰레기' 서식지는 오염도 관리 대상에서 제외
+    habitat_names = [h[0] for h in habitats if h[0] and h[0] != "쓰레기"]
 
     for h_name in habitat_names:
         new_hp = models.HabitatPollution(
@@ -57,4 +54,33 @@ def read_user(user_id: int, db: Session = Depends(database.get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    
+    # 아쿠아리움 목록을 AquariumItem 형식으로 변환
+    fish_list = []
+    for item in user.aquarium:
+        fish_list.append(schemas.AquariumItem(
+            id=item.id,
+            species_id=item.species_id,
+            name=item.species.name,
+            image_url=item.species.image_url,
+            caught_at=item.caught_at
+        ))
+
+    # 편지 목록을 FishLetterSchema 형식으로 변환
+    received_letter_list = []
+    for letter in user.letters:
+        received_letter_list.append(schemas.FishLetterSchema(
+            id=letter.id,
+            species_id=letter.species_id,
+            species_name=letter.species.name,
+            content=letter.content,
+            is_read=letter.is_read,
+            created_at=letter.created_at
+        ))
+    
+    # Pydantic 모델에 맞게 데이터 구성
+    user_data = schemas.UserResponse.from_orm(user)
+    user_data.aquarium_list = fish_list
+    user_data.letter_list = received_letter_list
+    
+    return user_data

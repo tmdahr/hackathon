@@ -64,6 +64,7 @@ class FishingHistory(Base):
     caught_at = Column(String(50))  # ISO timestamp
     was_new = Column(Boolean, default=False)
     invalidated = Column(Boolean, default=False)
+    is_sick = Column(Boolean, default=False) # 추가: 병든 여부
 class Aquarium(Base):
     __tablename__ = "aquarium"
 
@@ -71,6 +72,7 @@ class Aquarium(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     species_id = Column(Integer, ForeignKey("species.id"))
     caught_at = Column(String(50))  # ISO timestamp
+    is_sick = Column(Boolean, default=False) # 추가: 병든 여부
 
     user = relationship("User", back_populates="aquarium")
     species = relationship("Species")

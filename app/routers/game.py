@@ -17,16 +17,16 @@ def select_species_type_by_pollution(pollution: int, rod_level: int):
     # 순서: [0:쓰레기, 1:일반, 2:멸종위기] (번호 변경됨)
     if pollution >= 80:
         # 매우 더러움
-        weights = [70, 30, 0] 
-    elif pollution >= 60:
+        weights = [80, 20, 0]
+    elif pollution >= 50:
         # 보통
-        weights = [60, 45, 5]
-    elif pollution >= 40:
+        weights = [65, 30, 5]
+    elif pollution >= 30:
         # 깨끗함
-        weights = [30, 60, 10]
+        weights = [35, 55, 10]
     else:
         # 매우 깨끗함
-        weights = [5, 70, 25]
+        weights = [10, 70, 20]
 
     # 2. 낚싯대 레벨에 따른 확률 보정
     if rod_level == 2:  # 카본 낚싯대
@@ -109,6 +109,13 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
     
     # 3. 도감(Collection)에 저장 (쓰레기(type=0)는 제외)
     is_new = False
+    is_sick = False # 기본값
+    
+    # [추가] 오염도가 50 이상인 경우 오염도% 확률로 병든 물고기 발생 (쓰레기 제외)
+    if caught_fish.type != 0 and habitat_pollution.pollution_level >= 50:
+        if random.random() < (habitat_pollution.pollution_level / 100.0):
+            is_sick = True
+
     if caught_fish.type != 0:
         collection = db.query(models.Collection).filter(
             models.Collection.user_id == user.id,
@@ -137,21 +144,27 @@ def fishing(user_id: int, habitat: str, db: Session = Depends(database.get_db)):
         habitat=habitat, # 잡힌 서식지 저장
         caught_at=datetime.now().isoformat(),
         was_new=is_new,
-        invalidated=False
+        invalidated=False,
+        is_sick=is_sick # 병든 여부 저장
     )
     db.add(fishing_record)
     
     db.commit()
     
+    fish_msg = f"낚시 성공! {caught_fish.name}을(를) 잡았습니다."
+    if is_sick:
+        fish_msg = f"낚시 성공! 하지만 오염된 물 때문에 병든 {caught_fish.name}이(가) 잡혔습니다..."
+
     return {
-        "message": f"낚시 성공! {caught_fish.name}을(를) 잡았습니다.",
+        "message": fish_msg,
         "fish": {
             "id": caught_fish.id, # 추가: 물고기 종 ID
             "name": caught_fish.name,
             "type": caught_fish.type, # 0:쓰레기, 1:일반 해양 생물, 2:멸종위기종
             "price": caught_fish.price,
             "image_url": caught_fish.image_url,
-            "habitat": caught_fish.habitat
+            "habitat": caught_fish.habitat,
+            "is_sick": is_sick
         },
         "is_new": is_new,
         "user_status": {
@@ -187,21 +200,27 @@ def handle_action(request: schemas.UserActionRequest, background_tasks: Backgrou
         models.FishingHistory.invalidated == False
     ).order_by(models.FishingHistory.id.desc()).first()
 
-    # habitat_name 결정: 요청에 있으면 쓰고, 없으면 히스토리에서 가져옴
+    # habitat_name 및 is_sick 결정: 요청에 있으면 쓰고, 없으면 히스토리에서 가져옴
     habitat_name = request.habitat if request.habitat else (history.habitat if history else "알 수 없음")
+    is_sick = request.is_sick if request.is_sick else (history.is_sick if history else False)
 
     # 행동에 따른 로직 분기
     if request.action == schemas.ActionType.SELL:
         # 1. 판매 (SELL)
         if species.type == 0:
-            pollution_change = -5 # 청소 효과
+            pollution_change = -2 # 청소 효과
             message = f"쓰레기를 치워서 {habitat_name}이(가) 깨끗해졌습니다."
         elif species.type == 2:
             money_change = -1000 # 벌금
             message = "멸종위기종을 팔려다 적발되어 벌금을 물었습니다!"
         else:
-            money_change = species.price
-            message = f"{species.name}을(를) 팔아 {species.price}원을 벌었습니다."
+            final_price = species.price
+            if is_sick:
+                final_price = int(species.price * 0.5) # 병든 물고기는 반값
+                message = f"병든 {species.name}을(를) 팔아 {final_price}원을 벌었습니다. (병든 물고기 페널티 -50%)"
+            else:
+                message = f"{species.name}을(를) 팔아 {species.price}원을 벌었습니다."
+            money_change = final_price
             
     elif request.action == schemas.ActionType.RELEASE:
         # 2. 방생 (RELEASE)
@@ -209,8 +228,8 @@ def handle_action(request: schemas.UserActionRequest, background_tasks: Backgrou
             pollution_change = 10 # 쓰레기 투기
             message = f"쓰레기를 다시 버려서 {habitat_name}이(가) 더러워졌습니다..."
         elif species.type == 2:
-            pollution_change = -10 # 생태계 회복
-            money_change = 1500 # 정부 보조금
+            pollution_change = -5 # 생태계 회복
+            money_change = 1000 # 정부 보조금
             message = "멸종위기종을 보호해주어 정부 지원금을 받았습니다!"
         else:
             pollution_change = -2 # 일반 물고기 방생은 환경에 약간 좋음
@@ -221,6 +240,10 @@ def handle_action(request: schemas.UserActionRequest, background_tasks: Backgrou
         if species.type == 0:
             money_change = -500 # 벌금
             message = "쓰레기를 아쿠아리움에 추가해 벌금을 납부했습니다."
+        elif is_sick:
+            # 병든 물고기는 수송 중 사망
+            message = f"{species.name}이(가) 수송 중 사망했습니다... (오염된 물 때문에 병든 상태였습니다)"
+            # 아무런 추가 작업 없음 (Aquarium에 저장되지 않음)
         else:
             # 아쿠아리움에 추가
             from datetime import datetime
@@ -231,6 +254,7 @@ def handle_action(request: schemas.UserActionRequest, background_tasks: Backgrou
             )
             db.add(new_aquarium_fish)
             message = f"{species.name}을(를) 아쿠아리움에 추가했습니다."
+                
             if random.random() < 0.3:
                 # 비동기로 편지 생성
                 background_tasks.add_task(generate_message_task, species.id, user.id)
